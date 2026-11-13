@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Environment secrets — never commit real keys
+.env
+.env.*
+!.env.example
+
+# Test coverage output
+coverage/
+
+# macOS metadata
+.DS_Store
+
+# Log files
+*.log
+npm-debug.log*
+
+# Claude Code local settings (machine-specific, not for sharing)
+**/.claude/settings.local.json
+
+# LLM response caches
+.cache/
+**/.cache/
+*.llm-cache
+llm-cache/
