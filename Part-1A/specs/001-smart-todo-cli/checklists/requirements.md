@@ -31,4 +31,6 @@
 
 ## Notes
 
-All items pass. Spec is ready for `/speckit-clarify` (optional refinement) or `/speckit-plan`.
+All items pass. Gap-fill session 2026-11-14 added AC-052–AC-057 to close zero-coverage gaps
+on FR-002, FR-017, FR-025b, FR-026, FR-037, and FR-005 (never-reuse property).
+All 44 FRs (including sub-IDs) now have at least one AC. Spec is ready for `/speckit-plan`.
