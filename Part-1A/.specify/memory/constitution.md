@@ -1,20 +1,14 @@
 <!--
 SYNC IMPACT REPORT (remove before committing)
 =============================================
-Version change:  [unversioned placeholder] → 1.0.0
+Version change:  1.0.0 → 1.1.0
 Modified principles:
-  [PRINCIPLE_1_NAME] → I. Code Quality & Static Analysis
-  [PRINCIPLE_2_NAME] → II. Test Quality & Coverage
-  [PRINCIPLE_3_NAME] → III. Requirement Traceability
-  [PRINCIPLE_4_NAME] → IV. Persistence & Reliability
-  [PRINCIPLE_5_NAME] → V. Security Constraints
-Added sections:
-  - Agent Rules (Non-Negotiable)
-  - Harness Independence
-Removed sections:
-  - [SECTION_2_NAME] placeholder
-  - [SECTION_3_NAME] placeholder
-Follow-up TODOs: None — all placeholders resolved.
+  V. Security Constraints — path-traversal clause updated: replaced "designated data directory"
+  language with explicit "reject '..' segments → path.resolve()" wording to match the
+  implementation approach specified in spec.md (FR-036) and plan.md.
+Added sections: none
+Removed sections: none
+Follow-up TODOs: None.
 -->
 
 # Smart Todo Constitution
@@ -75,8 +69,8 @@ The following constructs are PROHIBITED in all application source code and scrip
 - `eval()`, `new Function()`, or any equivalent dynamic code execution.
 - `child_process` invocations with `shell: true`.
 - Dynamic `require()` / `import()` where the module path originates from user-supplied input.
-- Path traversal: the storage file path MUST be resolved with `path.resolve()` and validated to
-  remain within the designated data directory before any file I/O.
+- Path traversal: any `TODO_FILE` path containing `..` segments MUST be rejected (exit 1) before
+  any file I/O; the path MUST then be resolved to an absolute path using `path.resolve()`.
 
 Rationale: the CLI handles local user data only; the attack surface must be kept minimal and all
 user-controlled inputs must be sanitised before reaching the filesystem or any interpreter.
@@ -130,4 +124,4 @@ details defeats this purpose and allows refactors to silently change observable 
 - Compliance review is expected at the start of each implementation task (via `/speckit-analyze`)
   and before any deliverable is submitted.
 
-**Version**: 1.0.0 | **Ratified**: 2026-11-14 | **Last Amended**: 2026-11-14
+**Version**: 1.1.0 | **Ratified**: 2026-11-14 | **Last Amended**: 2026-11-15

@@ -406,6 +406,40 @@ state.
     `todo show 3` exits with code 2 and stderr containing `"3"` and `"not found"`.
     *Covers: FR-005, FR-040, FR-042*
 
+28. **[AC-058]** **Given** a task exists (id=1) already carrying tag `work`, **When** the developer
+    runs `todo tag 1 work --json`, **Then** the CLI prints to stdout a valid JSON object representing
+    the unchanged task (all field names in snake_case, `"work"` present in `tags` array) and exits
+    with code 0.
+    *Covers: FR-025, FR-032, FR-032a, FR-032b, FR-040*
+
+29. **[AC-059]** **Given** a task exists (id=1) that does not carry tag `missing`, **When** the
+    developer runs `todo untag 1 missing --json`, **Then** the CLI prints to stdout a valid JSON
+    object representing the unchanged task (all field names in snake_case, `"missing"` absent from
+    `tags` array) and exits with code 0.
+    *Covers: FR-025a, FR-032, FR-032a, FR-032b, FR-040*
+
+30. **[AC-060]** **Given** a task exists (id=1) with status `in_progress`, **When** the developer
+    runs `todo status 1 in_progress --json`, **Then** the CLI prints to stdout a valid JSON object
+    representing the unchanged task (all field names in snake_case, `"status": "in_progress"`) and
+    exits with code 0.
+    *Covers: FR-030, FR-032, FR-032a, FR-032b, FR-040*
+
+31. **[AC-061]** **Given** no tasks exist, **When** the developer runs `todo list --json`, **Then**
+    the CLI prints `[]` (a valid empty JSON array) to stdout and exits with code 0.
+    *Covers: FR-009, FR-012, FR-032, FR-032a, FR-040*
+
+32. **[AC-062]** **Given** an `add` command is supplied with exactly 10 distinct `--tag` values,
+    **When** the developer runs `todo add --title "X" --tag t1 --tag t2 ... --tag t10`, **Then**
+    the task is created with all 10 tags present, the CLI prints a one-line confirmation, and the
+    exit code is 0.
+    *Covers: FR-004, FR-024, FR-040*
+
+33. **[AC-063]** **Given** a task exists (id=1) with a non-empty description, **When** the developer
+    runs `todo update 1 --description "" --json`, **Then** the CLI prints to stdout a valid JSON
+    object with `"description": ""` (empty string, not null), `updated_at` refreshed, and exits
+    with code 0.
+    *Covers: FR-002, FR-015, FR-016, FR-032, FR-032a, FR-032b, FR-040*
+
 ---
 
 ### Edge Cases
@@ -621,7 +655,8 @@ state.
 - The `add` command outputs the created task's ID in the success message; the exact wording is
   left to implementation, but the ID MUST be present.
 - Clearing a description by supplying `--description ""` on `update` is a valid operation
-  (description has no minimum length); the field is set to an empty string or null.
+  (description has no minimum length); the field is set to an empty string (the data model
+  default is `""`, not null).
 
 ## Clarifications
 
@@ -654,3 +689,13 @@ state.
 - AC-055 added: both `tag` and `untag` on non-existent task ID → exit 2, stderr contains ID and "not found" (FR-026 — previously uncovered).
 - AC-056 added: after any successful write, no temp file remains and tasks.json is valid parseable JSON with the expected schema (FR-037 — previously uncovered).
 - AC-057 added: add 3 tasks, delete id=3, add again → new id is 4, not 3; id=3 returns exit 2 (FR-005 never-reuse property, extending AC-001).
+
+### Session 2026-11-15 (speckit-analyze remediation)
+
+- AC-058 added: `tag` no-op + `--json` → valid JSON object returned (FR-025, FR-032b — no-op path previously untested with `--json`).
+- AC-059 added: `untag` no-op + `--json` → valid JSON object returned (FR-025a, FR-032b — no-op path previously untested with `--json`).
+- AC-060 added: `status` no-op + `--json` → valid JSON object returned (FR-030, FR-032b — no-op path previously untested with `--json`).
+- AC-061 added: `list --json` on empty store → `[]` empty JSON array (FR-009, FR-012, FR-032 — empty store + `--json` combination was untested).
+- AC-062 added: `add` with exactly 10 distinct tags → success, exit 0 (FR-004, FR-024 — upper boundary was untested; only the 11-tag failure was covered).
+- AC-063 added: `update --description "" --json` → `"description": ""` in JSON output (FR-002, FR-015 — clearing description was noted in Assumptions but had no AC).
+- Assumptions: "or null" removed from description-clearing note; description is always set to empty string per data-model default of `""`.
