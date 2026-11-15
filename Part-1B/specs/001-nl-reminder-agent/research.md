@@ -71,6 +71,8 @@ const validate = ajv.compile(reminderOutputV1Schema);
 - Format output: `.toISO()` (includes UTC offset)
 - Past-due check: `dueDateTime <= referenceDateTime`
 
+**Production usage clarification**: In the production agent (`src/agent.js`), Luxon is used exclusively for pre-flight validation (`validateTimezone`) and `isInFuture` checks. Date resolution is performed by the LLM itself — the prompt embeds `referenceNow` and `timezone` so the model can resolve relative expressions directly. `resolveRelativeDate()` in `src/dates/resolver.js` is a utility exported for unit-test verification of PROP-010 (next-weekday logic) and prompt guidance review — it is not called on the production execution path.
+
 **Alternatives considered**:
 - `date-fns-tz`: Good but more verbose for IANA zone handling; Luxon has built-in IANA support via the Intl API.
 - `dayjs` with `timezone` plugin: Requires plugin chain; Luxon is self-contained.

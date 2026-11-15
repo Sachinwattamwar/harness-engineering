@@ -38,6 +38,12 @@
             "pattern": "^(FR|AC|INV|PROP|GR|SEM)-[0-9]{3}$"
           },
           "description": "One or more INV/PROP/GR/FR/AC/SEM identifiers from the spec that this case validates."
+        },
+        "expected_exit_code": {
+          "type": "integer",
+          "enum": [0, 1, 4],
+          "default": 0,
+          "description": "Expected CLI exit code. Defaults to 0. run-eval.js: if actual exit matches → evaluate layers normally; if actual exit 4 and expected_exit_code ≠ 4 → classify as ERROR (excluded from scoring)."
         }
       }
     },
@@ -95,10 +101,10 @@
           "type": "boolean",
           "description": "If true, asserts that priority === 'medium'."
         },
-        "exitCode": {
+        "expected_exit_code": {
           "type": "integer",
           "enum": [0, 1, 4],
-          "description": "Expected CLI exit code."
+          "description": "Expected CLI exit code (legacy assertions field — prefer top-level EvalCase.expected_exit_code; both accepted by harness)."
         },
         "semChecks": {
           "type": "array",

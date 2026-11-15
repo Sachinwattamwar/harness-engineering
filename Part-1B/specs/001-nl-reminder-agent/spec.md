@@ -74,7 +74,7 @@
 
 - Q: What should `priority` default to when no priority signal is present (applies to all intent values, including `clarify` and `refuse`)? → A: `medium` — universal default; no inference required for structurally required field with no semantic signal.
 - Q: What timeout threshold and retry count should be declared for model/service failures? → A: 30-second timeout, 2 retries (3 total attempts) with exponential backoff — aligns with constitution minimum floor.
-- Q: In what format and location should the eval harness write run metadata (FR-015 / AC-024)? → A: JSONL file — one JSON record per run appended to `eval-results.jsonl` in the feature directory; accumulates history across runs.
+- Q: In what format and location should the eval harness write run metadata (FR-015 / AC-024)? → A: Two required JSON files — `evidence/eval-results.json` (full summary + per-case results of latest run; overwritten each run) and `evidence/eval-runs/run-<n>-<timestamp>.json` (identical per-run copy; never deleted); `eval-results.jsonl` is an optional convenience log (SHOULD, not MUST).
 - Q: Are natural-language date expressions and task descriptions in non-English languages in scope for v1? → A: English only — non-English input is explicitly out of scope for v1; behavior is undefined.
 - Q: For `intent=reschedule` or `intent=snooze`, should `title` be populated when inferable, or is `null` always acceptable? → A: Best-effort — populate if inferable from the request; `null` acceptable when not; SEM-001 applies only when `title` is non-null.
 
@@ -114,6 +114,30 @@ request and asserting the JSON output against reminder-output/v1 and PROP-002.
    **When** the agent processes it,
    **Then** `priority` MUST be one of `low | medium | high` and `tags` MUST be a JSON array
    (may be empty) where each element is a non-empty string.  *(AC-018)*
+
+4. **Given** the request "Remind me at midnight tonight" with reference now
+   `2026-11-15T22:00:00+05:30` and timezone `Asia/Kolkata`,
+   **When** the agent processes it,
+   **Then** `intent` MUST be `"create"`, `due` MUST be exactly `2026-11-16T00:00:00+05:30`
+   (midnight, beginning of next day), and `due` MUST include explicit UTC offset.  *(AC-026)*
+
+5. **Given** the request "Remind me in 2 days" with reference now
+   `2026-11-29T10:00:00+05:30` and timezone `Asia/Kolkata`,
+   **When** the agent processes it,
+   **Then** `intent` MUST be `"create"` and `due` MUST be `2026-12-01T10:00:00+05:30`
+   (month-end rollover into December).  *(AC-027)*
+
+6. **Given** the request "Remind me in 2 days" with reference now
+   `2028-02-27T10:00:00+05:30` and timezone `Asia/Kolkata`,
+   **When** the agent processes it,
+   **Then** `intent` MUST be `"create"` and `due` MUST be `2028-02-29T10:00:00+05:30`
+   (leap-day, year 2028 is a leap year).  *(AC-028)*
+
+7. **Given** the request "Remind me at 9am tomorrow" with reference now
+   `2026-11-15T23:59:00+05:30` and timezone `Asia/Kolkata`,
+   **When** the agent processes it,
+   **Then** `intent` MUST be `"create"` and `due` MUST be `2026-11-16T09:00:00+05:30`
+   ("tomorrow" from 23:59 reference must still resolve to the next calendar day).  *(AC-029)*
 
 ---
 
@@ -262,9 +286,15 @@ stdout contains no JSON object.
 3. **Given** the eval harness successfully processes a valid input and the agent returns a
    schema-valid output,
    **When** the eval harness records the result,
-   **Then** a JSON record MUST be appended to `eval-results.jsonl` in the feature directory
-   containing: provider name, model name, temperature, prompt version, harness version,
-   ISO-8601 timestamp, and per-case scores for the run.  *(AC-024)*
+   **Then** `evidence/eval-results.json` MUST be written (full summary + per-case results;
+   overwritten), `evidence/eval-runs/run-<n>-<timestamp>.json` MUST be written (never
+   deleted), and each record MUST contain: provider name, model name, temperature, prompt
+   version, harness version, ISO-8601 timestamp, and per-case scores for the run.  *(AC-024)*
+
+4. **Given** `LLM_PROVIDER=stub` is set in the environment,
+   **When** `npm run eval` is invoked,
+   **Then** the eval harness MUST exit non-zero before running any eval cases and MUST
+   emit a descriptive message on stderr naming the stub provider as the cause.  *(AC-025)*
 
 ---
 
@@ -406,11 +436,14 @@ breaking change and requires a schema version bump and a new `$id`.
   descriptive message on stderr; this is distinct from application validation failures (exit 1).
 - **FR-014**: All LLM calls MUST be routed through a provider adapter whose active provider
   and model are selected by environment variables.
-- **FR-015**: After each eval run, the eval harness MUST append one JSON record to
-  `eval-results.jsonl` in the feature directory. Each record MUST include: provider name,
-  model name, temperature, prompt version, harness version, ISO-8601 timestamp, and the
-  per-case scores for that run. This file accumulates results across all runs and MUST NOT
-  be overwritten between runs.
+- **FR-015**: After each eval run, the eval harness MUST write `evidence/eval-results.json`
+  (full summary + per-case results of the latest run; overwritten each run) and
+  `evidence/eval-runs/run-<n>-<timestamp>.json` (identical per-run copy; never deleted).
+  Each record MUST include: provider name, model name, temperature, prompt version, harness
+  version, ISO-8601 timestamp, and the per-case scores for that run. Additionally, the
+  harness SHOULD append one JSON record to `eval-results.jsonl` in the feature directory
+  as an optional convenience log; this file is not a substitute for the two required JSON
+  files above.
 - **FR-016**: Input text exceeding 2000 characters MUST be rejected with exit code 1 and a
   descriptive error on stderr before any LLM call is made.
 - **FR-017**: A missing or malformed reference now argument (not valid ISO-8601 with explicit
@@ -428,6 +461,9 @@ breaking change and requires a schema version bump and a new `$id`.
   description if it can be inferred from the request text. `null` is acceptable when no task
   title can be determined without external context (e.g., "Snooze this for 30 minutes"). No
   `intent=clarify` is triggered solely because a reschedule/snooze title cannot be inferred.
+- **FR-022**: The eval harness MUST refuse to run when `LLM_PROVIDER=stub` is set. It MUST
+  exit with a non-zero exit code and emit a descriptive message on stderr before running any
+  eval cases. This safeguard prevents accidental test-double pollution of eval results.
 
 ### Key Entities
 
@@ -599,7 +635,12 @@ a rule-based PASS or FAIL, and NEVER replace layers 1–2.
 | AC-021 | Empty / whitespace input → clarify              | FR-007, FR-019, INV-006, SEM-002                     |
 | AC-022 | Emoji-only input → clarify                      | FR-007, FR-019, INV-006                              |
 | AC-023 | Input > 2000 chars → exit 1                     | FR-016, INV-010, INV-011                             |
-| AC-024 | Eval-run metadata recorded                      | FR-015                                               |
+| AC-024 | Eval-run metadata recorded (`evidence/` files)  | FR-015                                               |
+| AC-025 | Eval refuses `LLM_PROVIDER=stub`                | FR-022                                               |
+| AC-026 | Boundary: midnight — "at midnight tonight"      | FR-002, FR-008, INV-005, PROP-002                    |
+| AC-027 | Boundary: month-end rollover — "in 2 days"      | FR-002, FR-008, INV-005, PROP-002                    |
+| AC-028 | Boundary: leap-day — "in 2 days"                | FR-002, FR-008, INV-005, PROP-002                    |
+| AC-029 | Boundary: "tomorrow" at 23:59 reference         | FR-002, FR-008, INV-005, PROP-002                    |
 
 ---
 

@@ -68,6 +68,11 @@ The abstraction layer between the agent and the LLM API. No business logic lives
 - Calls `openai.chat.completions.create()` with `response_format: { type: "json_schema", ... }`
 - Returns the parsed JSON object (pre-validated by Structured Outputs; still verified by Ajv)
 
+**StubAdapter** (test-double implementation — `LLM_PROVIDER=stub`):
+- Returns the parsed JSON from `STUB_RESPONSE` env var (a JSON string), or falls back to `evals/fixtures/stub-response.json`
+- Makes no network calls; always succeeds synchronously (no retry logic)
+- For integration tests ONLY — the eval harness refuses to run when `LLM_PROVIDER=stub` (FR-022)
+
 ---
 
 ### 4. EvalCase
@@ -82,6 +87,7 @@ A named, versioned test case entry in `evals/dataset.json`. Derived from spec ac
 | `assertions` | object | Declarative expected-value checks (see sub-fields below) |
 | `mappedIds` | string[] | One or more INV/PROP/GR/FR/AC/SEM identifiers from spec |
 | `weight` | number (derived) | Highest weight among `mappedIds`: GR=3, INV/PROP=2, FR/AC/SEM=1 |
+| `expected_exit_code` | number (optional) | Expected CLI exit code for this case; defaults to 0 if absent; used by run-eval.js to distinguish expected non-zero exits (PASS) from unexpected service errors (ERROR) |
 
 **assertions sub-fields** (all optional; eval harness checks only the ones present):
 
@@ -93,7 +99,7 @@ A named, versioned test case entry in `evals/dataset.json`. Derived from spec ac
 | `dueIsNull` | boolean | Assert `due === null` |
 | `titleNonNull` | boolean | Assert `title !== null` |
 | `priorityDefault` | boolean | Assert `priority === "medium"` |
-| `exitCode` | number | Expected CLI exit code |
+| `expected_exit_code` | number | Expected CLI exit code (0, 1, or 4); default 0; run-eval.js: if actual exit = `expected_exit_code` → evaluate layers; if actual exit 4 and `expected_exit_code ≠ 4` → ERROR (excluded from scoring) |
 | `semChecks` | string[] | SEM identifiers to evaluate for this case |
 
 ---

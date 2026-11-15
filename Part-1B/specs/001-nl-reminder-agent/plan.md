@@ -29,7 +29,7 @@ not be lowered after the first run.
 - `eslint` + `eslint-plugin-security` — static analysis; 0 errors required
 - `semgrep` — SAST; 0 findings required (via npm script)
 
-**Storage**: None (stateless); eval harness writes `eval-results.jsonl` and `evidence/` JSON files
+**Storage**: None (stateless); eval harness writes required `evidence/eval-results.json` (latest run, overwritten) and `evidence/eval-runs/run-<n>-<timestamp>.json` (per-run copies, never deleted); optionally appends to `eval-results.jsonl` as a convenience log
 
 **Testing**: Vitest with `@vitest/coverage-v8`; LLM adapter mocked in all unit and integration
 tests; CLI subprocess tests via Node.js `child_process` for end-to-end exit-code coverage;
@@ -94,8 +94,9 @@ bin/
 src/
 ├── agent.js             # Orchestration: pre-flight → adapter call → Ajv validate → return output
 ├── llm/
-│   ├── adapter.js       # Provider adapter factory (createAdapter) + AdapterError class
-│   └── openai.js        # OpenAI adapter: chat.completions.create, Structured Outputs, retry logic
+│   ├── adapter.js       # Provider adapter factory (createAdapter) + AdapterError class; LLM_PROVIDER=stub → StubAdapter
+│   ├── openai.js        # OpenAI adapter: chat.completions.create, Structured Outputs, retry logic
+│   └── stub.js          # StubAdapter: returns STUB_RESPONSE env var or evals/fixtures/stub-response.json; no network; for integration tests only
 ├── schema/
 │   └── validator.js     # Ajv setup; compiles and exports reminder-output/v1 validate function
 └── dates/
@@ -103,6 +104,10 @@ src/
 
 prompts/
 └── v1.txt               # Versioned system prompt
+
+evals/
+└── fixtures/
+    └── stub-response.json  # Default canned output for StubAdapter when STUB_RESPONSE env var absent
 
 tests/
 ├── unit/
