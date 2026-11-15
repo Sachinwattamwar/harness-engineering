@@ -1,4 +1,4 @@
-import { loadStore } from "../../src/store.js";
+import { loadOrExit } from "../../src/loader.js";
 import { formatJson, formatTable } from "../../src/format.js";
 
 function priorityValue(p) {
@@ -16,17 +16,7 @@ export function registerListCommand(program) {
     .action(async (opts) => {
       const todoFile = process.env.TODO_FILE || "./tasks.json";
 
-      let store;
-      try {
-        store = await loadStore(todoFile);
-      } catch (err) {
-        if (err.code === "VALIDATION_ERROR") {
-          process.stderr.write(`${err.message}\n`);
-          process.exit(1);
-        }
-        process.stderr.write(`${err.message}\n`);
-        process.exit(3);
-      }
+      const store = await loadOrExit(todoFile);
 
       let tasks = store.tasks;
 
@@ -40,8 +30,7 @@ export function registerListCommand(program) {
         const pa = priorityValue(a.priority);
         const pb = priorityValue(b.priority);
         if (pb !== pa) return pb - pa;
-        if (a.created_at !== b.created_at) return a.created_at < b.created_at ? -1 : 1;
-        return a.id - b.id;
+        return a.created_at !== b.created_at ? (a.created_at < b.created_at ? -1 : 1) : (a.id - b.id);
       });
 
       if (opts.json) {

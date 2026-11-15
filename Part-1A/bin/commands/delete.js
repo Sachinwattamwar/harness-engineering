@@ -1,4 +1,4 @@
-import { loadStore, saveStore } from "../../src/store.js";
+import { loadOrExit, saveOrExit } from "../../src/loader.js";
 import { validateId } from "../../src/validate.js";
 import { formatJson, formatConfirmation } from "../../src/format.js";
 
@@ -17,17 +17,7 @@ export function registerDeleteCommand(program) {
         process.exit(1);
       }
 
-      let store;
-      try {
-        store = await loadStore(todoFile);
-      } catch (err) {
-        if (err.code === "VALIDATION_ERROR") {
-          process.stderr.write(`${err.message}\n`);
-          process.exit(1);
-        }
-        process.stderr.write(`${err.message}\n`);
-        process.exit(3);
-      }
+      const store = await loadOrExit(todoFile);
 
       const numId = parseInt(id, 10);
       const idx = store.tasks.findIndex((t) => t.id === numId);
@@ -38,12 +28,7 @@ export function registerDeleteCommand(program) {
 
       const deleted = store.tasks.splice(idx, 1)[0];
 
-      try {
-        await saveStore(todoFile, store);
-      } catch (err) {
-        process.stderr.write(`${err.message}\n`);
-        process.exit(3);
-      }
+      await saveOrExit(todoFile, store);
 
       if (opts.json) {
         process.stdout.write(formatJson(deleted) + "\n");

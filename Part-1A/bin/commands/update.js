@@ -1,4 +1,4 @@
-import { loadStore, saveStore } from "../../src/store.js";
+import { loadOrExit, saveOrExit } from "../../src/loader.js";
 import { validateId, validateTitle, validatePriority } from "../../src/validate.js";
 import { formatJson, formatConfirmation } from "../../src/format.js";
 
@@ -41,17 +41,7 @@ export function registerUpdateCommand(program) {
         }
       }
 
-      let store;
-      try {
-        store = await loadStore(todoFile);
-      } catch (err) {
-        if (err.code === "VALIDATION_ERROR") {
-          process.stderr.write(`${err.message}\n`);
-          process.exit(1);
-        }
-        process.stderr.write(`${err.message}\n`);
-        process.exit(3);
-      }
+      const store = await loadOrExit(todoFile);
 
       const numId = parseInt(id, 10);
       const task = store.tasks.find((t) => t.id === numId);
@@ -65,12 +55,7 @@ export function registerUpdateCommand(program) {
       if (opts.priority !== undefined) task.priority = opts.priority;
       task.updated_at = new Date().toISOString();
 
-      try {
-        await saveStore(todoFile, store);
-      } catch (err) {
-        process.stderr.write(`${err.message}\n`);
-        process.exit(3);
-      }
+      await saveOrExit(todoFile, store);
 
       if (opts.json) {
         process.stdout.write(formatJson(task) + "\n");
