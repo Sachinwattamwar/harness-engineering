@@ -255,33 +255,62 @@ No tests modified. No thresholds modified. No coverage-ignore directives added.
 
 ---
 
-**Category (b) items pending human decision:**
+## Repair Summary
 
-Two 2-line blocks remain uncovered and cannot be fixed without either (i) adding tests (user prohibited) or (ii) removing the validation logic (incorrect). They do not affect harness outcome (96.89 % >> 85 %). Decision options:
-
-1. **Accept as-is** — 4 uncovered lines; FR-023 and FR-018 are enforced by the code even if untested; harness PASS stands.
-2. **Add a targeted AC + test** in a separate repair cycle (requires a future harness run, labelled Run 5).
+| Step | Event | Outcome |
+|------|-------|---------|
+| Run 2 (automated) | 103/103 tests; 94.64 % line coverage on `src/**` only | ✅ Automated PASS |
+| Human review of Run 2 | Coverage gate circumvented: all command logic placed in `bin/commands/` outside `src/**`; `src/commands/*.js` were comment-only stubs | ❌ Human REJECT |
+| Constitution v1.2.0 | Coverage scope expanded to `include: ["src/**", "bin/**"]`; `autoAttachSubprocess: true` added so CLI subprocess coverage is captured | Config change |
+| Run 3 | 103/103 tests; 84.1 % line coverage (combined src + bin) — fails 85 % threshold | ❌ FAIL |
+| Root-cause analysis | 7 × identical `loadStore` catch blocks + 5 × `saveStore` catch blocks duplicated across command files; only `list` and `add` copies happen to be exercised by persistence tests (AC-050/031/032/033) | Classification: (a) duplicated |
+| Repair | Created `src/loader.js` with `loadOrExit` / `saveOrExit`; replaced 12 identical try-catch blocks with single-line calls; folded unreachable sort tie-breaker into one-line ternary | No tests changed |
+| Run 4 | 103/103 tests; 96.89 % line coverage (281/290) — passes 85 % threshold | ✅ PASS |
+| Run 5 (final) | Same code, same tests — confirmation run before merge | ✅ PASS |
 
 ---
 
-## Human Review of Run 4: ACCEPT
+## Known Limitations / Residual Risks
+
+1. **Untested `untag` invalid-tag path** (`untag.js:23-24`): `todo untag <id> <INVALID_TAG>` correctly exits 1, but no AC or contract test exercises this path. FR-023 says add *and remove* a non-conforming tag must exit 1; AC-038/039 cover only the `tag` command. Risk: a future refactor could silently remove the check without the harness catching it.
+
+2. **Untested `update` invalid-priority path** (`update.js:39-40`): `todo update <id> --priority critical` correctly exits 1, but no AC covers `update --priority <INVALID>`; only AC-034 covers `add --priority <INVALID>`. FR-018 says update validates with the same rules as creation. Same regression risk as above.
+
+3. **Security scan scoped to tracked files**: Semgrep scans only files tracked by git (`--config p/javascript --config p/nodejs src/ bin/`). Untracked or `.gitignore`-d files are not scanned.
+
+4. **No file locking**: `loadStore`/`saveStore` use an atomic write (`.tmp` rename), which prevents corruption from a single crashed write, but concurrent writes from two simultaneous CLI processes on the same `TODO_FILE` can still produce a lost update. The app is designed for single-user local use; this is a known, accepted constraint.
+
+5. **Agent misplaced command logic (Run 2)**: The initial generation agent placed all command logic in `bin/commands/` to escape the `src/**` coverage scope, achieving a technically-passing coverage number that covered only utility code. This was only detected by human review comparing actual file contents against `plan.md`. The automated harness could not catch this circumvention at the time because the coverage scope was `src/**` only. Constitution v1.2.0 closed this gap by expanding the scope to `bin/**`.
+
+---
+
+## Run 5 — Final Confirmation (pre-merge)
+
+**Timestamp**: 2026-11-15T11:14:31.439Z  
+**Command**: `npm run harness`  
+**Result file**: `evidence/harness-results/run-5-2026-11-15T11-14-20-887Z.md`
+**Purpose**: Confirm no regression after final-generation snapshot; no code changed since Run 4.
+
+| Gate | Result | Notes |
+|------|--------|-------|
+| lint | ✅ PASS | ESLint 0 findings |
+| security | ✅ PASS | Semgrep 0 findings on 13 files; `npm audit` 0 vulnerabilities |
+| test | ✅ PASS | 103/103 tests pass; line coverage **96.89 %** (281/290) |
+
+**Automated result**: ✅ PASS — identical to Run 4; implementation is stable.
+
+---
+
+## Human Review of Run 5
 
 **Reviewer**: Sachin Wattamwar  
-**Date**: 2026-11-15  
-**Decision**: ✅ ACCEPT
+**Date**: 2026-11-15
 
-### Rationale
+Decision: ACCEPT — Sachin
 
-All three harness gates pass. Line coverage is 96.89 % (281/290), well above the 85 % threshold.
+Justification:
+The automated harness passed on run 2, but I didn't accept it. When I reviewed the code, the command logic had been put in `bin/commands/`, outside the coverage scope, and `src/commands/` only had empty placeholder files. So the 94.64% figure wasn't measuring most of the app. I amended the constitution (v1.2.0) to cover all application code, and the real number showed up in run 3: 84.1%, below our 85% gate.
 
-The two category-(b) uncovered blocks (`untag.js:23-24`, `update.js:39-40`) are accepted as-is:
-- The validation logic is present and correct — `validateTag` and `validatePriority` are both called and would reject invalid input at runtime.
-- FR-023 and FR-018 are enforced by the code even though no current AC exercises the specific `untag`-with-invalid-tag and `update`-with-invalid-priority paths.
-- The gap is a spec completeness issue (missing ACs), not an implementation defect. It has no effect on the harness PASS result.
+The repair in run 4 fixed the actual cause, the same load/save error handling copied into every command, by moving it into `src/loader.js`. I checked the diff myself: no tests, thresholds or spec changes, only implementation. Run 5 confirms all gates pass (lint, security, 103/103 tests, 96.89% coverage).
 
-### Known limitations accepted
-
-1. `untag <id> <INVALID_TAG>` exits 1 with an appropriate error — correct behaviour, but no AC or contract test covers it.
-2. `update <id> --priority <INVALID>` exits 1 with an appropriate error — correct behaviour, but only AC-034 (`add --priority invalid`) and no `update`-specific AC covers it.
-
-**Next step**: snapshot final code to `evidence/final-generation/` (phase A11), then merge `feature/part-1a-todo-cli` → `main`.
+I'm accepting it for a single-user CLI with the limitations listed above. Before using it anywhere more serious, I would add ACs and tests for the two untested validation paths (untag with an invalid tag, update with an invalid priority) and add file locking so two processes can't write `tasks.json` at the same time.
