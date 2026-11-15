@@ -1,0 +1,5 @@
+node_modules/
+coverage/
+evidence/harness-results/*.json
+evidence/harness-results/*.txt
+*.tmp
