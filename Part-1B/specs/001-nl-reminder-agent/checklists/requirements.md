@@ -31,8 +31,12 @@
 
 ## Notes
 
-- All 15 FRs, 10 INVs, 9 PROPs, 6 GRs, and 18 ACs validated against the constitution.
-- Evaluation thresholds declared in spec (SC-001 through SC-007) and Evaluation Framework
+- All 21 FRs, 11 INVs, 10 PROPs, 6 GRs, 4 SEMs, and 24 ACs validated against the constitution.
+- Evaluation thresholds declared in spec (SC-001 through SC-008) and Evaluation Framework
   section; MUST NOT be lowered after first run.
-- Scoring formula and per-case weights recorded; flaky-case handling defined.
+- Scoring formula and per-case weights recorded; flaky-case handling defined; semantic pass
+  threshold = 0.75 (fraction of SEM checks); SEM-001 scoped to non-null titles.
+- 5 clarifications integrated 2026-11-15: priority default (medium), retry/timeout (30 s, 2
+  retries), eval metadata format (JSONL), English-only scope, title best-effort for
+  reschedule/snooze.
 - No clarification markers remain; all assumptions documented in Assumptions section.

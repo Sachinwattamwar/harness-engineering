@@ -70,6 +70,14 @@
     to AC-001 and AC-002; GR-006 and FR-011 added to AC-009–012; INV-007 added to AC-009;
     FR-012 added to AC-013; FR-015 mapped to new AC-024 (eval-run metadata recording).
 
+### Session 2026-11-15
+
+- Q: What should `priority` default to when no priority signal is present (applies to all intent values, including `clarify` and `refuse`)? → A: `medium` — universal default; no inference required for structurally required field with no semantic signal.
+- Q: What timeout threshold and retry count should be declared for model/service failures? → A: 30-second timeout, 2 retries (3 total attempts) with exponential backoff — aligns with constitution minimum floor.
+- Q: In what format and location should the eval harness write run metadata (FR-015 / AC-024)? → A: JSONL file — one JSON record per run appended to `eval-results.jsonl` in the feature directory; accumulates history across runs.
+- Q: Are natural-language date expressions and task descriptions in non-English languages in scope for v1? → A: English only — non-English input is explicitly out of scope for v1; behavior is undefined.
+- Q: For `intent=reschedule` or `intent=snooze`, should `title` be populated when inferable, or is `null` always acceptable? → A: Best-effort — populate if inferable from the request; `null` acceptable when not; SEM-001 applies only when `title` is non-null.
+
 ---
 
 ## User Scenarios & Testing *(mandatory)*
@@ -126,8 +134,8 @@ a non-null, non-empty `clarification_question` and `due=null`.
 1. **Given** the request "Remind me to buy milk" with no time indicator,
    **When** the agent processes it,
    **Then** `intent` MUST be `"clarify"`, `clarification_question` MUST be non-null, non-empty,
-   and ask specifically about the missing time/schedule (not about the task), and `due` MUST be
-   `null`.  *(AC-003)*
+   and ask specifically about the missing time/schedule (not about the task), `priority` MUST
+   be `"medium"`, and `due` MUST be `null`.  *(AC-003)*
 
 2. **Given** a request providing only a time ("remind me at 5pm") with no discernible title,
    **When** the agent processes it,
@@ -176,13 +184,15 @@ and `due` strictly after reference now.
    `2026-11-15T09:00:00+05:30` (Sunday),
    **When** the agent processes it,
    **Then** `intent` MUST be `"reschedule"`, `due` MUST be exactly
-   `2026-11-16T10:00:00+05:30` (the first Monday strictly after 2026-11-15).  *(AC-008)*
+   `2026-11-16T10:00:00+05:30` (the first Monday strictly after 2026-11-15), and `title`
+   SHOULD be non-null and contain "dentist" (inferable from the request).  *(AC-008)*
 
 2. **Given** the request "Snooze this for 30 minutes" with reference now
    `2026-11-15T09:00:00+05:30`,
    **When** the agent processes it,
-   **Then** `intent` MUST be `"snooze"` and `due` MUST equal reference now + 30 minutes,
-   i.e., approximately `2026-11-15T09:30:00+05:30` (within ±1 minute).  *(AC-006)*
+   **Then** `intent` MUST be `"snooze"`, `due` MUST equal reference now + 30 minutes
+   (approximately `2026-11-15T09:30:00+05:30`, within ±1 minute), and `title` MAY be `null`
+   since no task title is inferable from "this".  *(AC-006)*
 
 ---
 
@@ -238,8 +248,9 @@ stdout contains no JSON object.
 
 **Acceptance Scenarios**:
 
-1. **Given** the LLM provider is unreachable (simulated), and a valid input request,
-   **When** the agent attempts to call the model,
+1. **Given** the LLM provider is unreachable (simulated) and all 3 attempts (1 initial + 2
+   retries with exponential backoff) have been exhausted,
+   **When** the agent concludes the call cannot succeed,
    **Then** exit code MUST be 4, stderr MUST contain a descriptive error message, and stdout
    MUST NOT contain a JSON object.  *(AC-015)*
 
@@ -251,8 +262,9 @@ stdout contains no JSON object.
 3. **Given** the eval harness successfully processes a valid input and the agent returns a
    schema-valid output,
    **When** the eval harness records the result,
-   **Then** the recorded entry MUST include provider name, model name, temperature, prompt
-   version, harness version, and an ISO-8601 timestamp.  *(AC-024)*
+   **Then** a JSON record MUST be appended to `eval-results.jsonl` in the feature directory
+   containing: provider name, model name, temperature, prompt version, harness version,
+   ISO-8601 timestamp, and per-case scores for the run.  *(AC-024)*
 
 ---
 
@@ -297,6 +309,8 @@ stdout contains no JSON.
   → Fail schema validation (INV-001, additionalProperties: false); exit code 1.
 - What happens when "next <weekday>" names the same weekday as the reference date?
   → Resolve to the next occurrence (7 days later), since "strictly after" excludes the same day.
+- What happens when the input is in a non-English language?
+  → Out of scope for v1; behavior is undefined. No eval cases cover non-English input.
 
 ---
 
@@ -392,14 +406,28 @@ breaking change and requires a schema version bump and a new `$id`.
   descriptive message on stderr; this is distinct from application validation failures (exit 1).
 - **FR-014**: All LLM calls MUST be routed through a provider adapter whose active provider
   and model are selected by environment variables.
-- **FR-015**: The model name, temperature, and prompt version MUST be recorded alongside every
-  structured output produced by the eval harness.
+- **FR-015**: After each eval run, the eval harness MUST append one JSON record to
+  `eval-results.jsonl` in the feature directory. Each record MUST include: provider name,
+  model name, temperature, prompt version, harness version, ISO-8601 timestamp, and the
+  per-case scores for that run. This file accumulates results across all runs and MUST NOT
+  be overwritten between runs.
 - **FR-016**: Input text exceeding 2000 characters MUST be rejected with exit code 1 and a
   descriptive error on stderr before any LLM call is made.
 - **FR-017**: A missing or malformed reference now argument (not valid ISO-8601 with explicit
   UTC offset) MUST cause exit code 1 with a descriptive error on stderr before any LLM call.
 - **FR-018**: An invalid IANA timezone string MUST cause exit code 1 with a descriptive error
   on stderr before any LLM call.
+- **FR-019**: When no priority cue can be inferred from the request, `priority` MUST default to
+  `"medium"`. For outputs where `intent ∈ {clarify, refuse}`, `priority` MUST be `"medium"`
+  unless an explicit priority signal was present in the request before the clarification or
+  guardrail condition was triggered.
+- **FR-020**: LLM calls MUST time out after 30 seconds of no response. On any ERROR condition
+  (timeout, unreachable endpoint, HTTP 429, HTTP 5xx, missing or unknown model), the CLI MUST
+  retry with exponential backoff up to 2 times (3 total attempts) before exiting with code 4.
+- **FR-021**: For `intent ∈ {reschedule, snooze}`, `title` SHOULD be populated with the task
+  description if it can be inferred from the request text. `null` is acceptable when no task
+  title can be determined without external context (e.g., "Snooze this for 30 minutes"). No
+  `intent=clarify` is triggered solely because a reschedule/snooze title cannot be inferred.
 
 ### Key Entities
 
@@ -499,18 +527,20 @@ Rule-based checks are primary. An optional LLM-as-judge may be invoked only when
 check is inconclusive (described per rule). LLM-as-judge results are logged but NEVER replace
 a rule-based PASS or FAIL, and NEVER replace layers 1–2.
 
-- **SEM-001**: For `intent ∈ {create, reschedule, snooze}`, `title` MUST preserve the key
-  task terms from the original request.
+- **SEM-001**: For `intent ∈ {create, reschedule, snooze}`, when `title` is non-null, it MUST
+  preserve the key task terms from the original request. For `intent ∈ {reschedule, snooze}`,
+  if `title` is `null` (per FR-021), SEM-001 is skipped (vacuously passes).
   - **Pass rule**: At least one substantive content word (noun or verb, excluding common
     stop-words) from the original request appears in `title` (case-insensitive; exact or
     stemmed/lemmatized token match is sufficient — e.g., "dentist" matches "dental").
   - **LLM-as-judge**: Optional; invoked only when the rule-based check is inconclusive (title
     is non-empty but shares no token match, even with stemming, despite appearing semantically
     equivalent).
-  - **Score**: Binary — 1 (pass) or 0 (fail).
+  - **Score**: Binary — 1 (pass) or 0 (fail); skipped (counts as 1) when `title` is `null`
+    for `reschedule`/`snooze`.
 
 - **SEM-002**: For `intent=clarify`, `clarification_question` MUST ask about the specifically-
-  missing item.
+  missing item. *(English-only keyword detection; v1 scope.)*
   - **Pass rule**:
     - If the request contains a task description but no time indicator →
       `clarification_question` MUST reference time/when/schedule (contains at least one of:
@@ -548,26 +578,26 @@ a rule-based PASS or FAIL, and NEVER replace layers 1–2.
 |--------|-------------------------------------------------|------------------------------------------------------|
 | AC-001 | Create: explicit future time, exact due         | FR-001, FR-004–008, INV-001–002, INV-008, PROP-001, PROP-002, SEM-001, SEM-004 |
 | AC-002 | Create: relative date "in 2 hours"              | FR-002, FR-008, INV-005, PROP-002, PROP-003, SEM-001 |
-| AC-003 | Clarify: no time indicator                      | FR-007, INV-006, SEM-002                             |
-| AC-004 | Clarify: no discernible title                   | FR-007, INV-006, SEM-002                             |
-| AC-005 | Clarify: past due date for create               | FR-009, INV-006                                      |
-| AC-006 | Snooze: explicit duration, exact due            | FR-010, INV-005, PROP-005, SEM-001                   |
-| AC-007 | Clarify: snooze with no duration                | FR-010, INV-006, SEM-002                             |
-| AC-008 | Reschedule: "next Monday" exact due             | FR-006, FR-008, INV-005, PROP-006, PROP-010, SEM-001 |
-| AC-009 | Refuse: prompt injection                        | FR-011, GR-001, GR-005, GR-006, INV-002, INV-007, SEM-003 |
-| AC-010 | Refuse: system prompt extraction                | FR-011, GR-002, GR-005, GR-006, INV-002, SEM-003    |
-| AC-011 | Refuse: API key extraction                      | FR-011, GR-003, GR-005, GR-006, INV-002, SEM-003    |
-| AC-012 | Refuse: harmful content                         | FR-011, GR-004, GR-005, GR-006, INV-002, SEM-003    |
+| AC-003 | Clarify: no time indicator                      | FR-007, FR-019, INV-006, SEM-002                     |
+| AC-004 | Clarify: no discernible title                   | FR-007, FR-019, INV-006, SEM-002                     |
+| AC-005 | Clarify: past due date for create               | FR-009, FR-019, INV-006                              |
+| AC-006 | Snooze: explicit duration, exact due            | FR-010, FR-021, INV-005, PROP-005, SEM-001           |
+| AC-007 | Clarify: snooze with no duration                | FR-010, FR-019, INV-006, SEM-002                     |
+| AC-008 | Reschedule: "next Monday" exact due             | FR-006, FR-008, FR-021, INV-005, PROP-006, PROP-010, SEM-001 |
+| AC-009 | Refuse: prompt injection                        | FR-011, FR-019, GR-001, GR-005, GR-006, INV-002, INV-007, SEM-003 |
+| AC-010 | Refuse: system prompt extraction                | FR-011, FR-019, GR-002, GR-005, GR-006, INV-002, SEM-003 |
+| AC-011 | Refuse: API key extraction                      | FR-011, FR-019, GR-003, GR-005, GR-006, INV-002, SEM-003 |
+| AC-012 | Refuse: harmful content                         | FR-011, FR-019, GR-004, GR-005, GR-006, INV-002, SEM-003 |
 | AC-013 | No extra fields in output                       | FR-012, INV-009                                      |
 | AC-014 | Default timezone equals explicit Kolkata        | FR-003, PROP-004                                     |
-| AC-015 | Model/service failure → exit 4                  | FR-013, PROP-007, INV-010                            |
+| AC-015 | Model/service failure → exit 4 (after 3 attempts) | FR-013, FR-020, PROP-007, INV-010                 |
 | AC-016 | Schema validation failure → exit 1              | FR-005, PROP-008, INV-010                            |
 | AC-017 | Provider adapter swap via env vars              | FR-014, PROP-009                                     |
 | AC-018 | Priority and tags extraction                    | FR-006, INV-003, INV-004, SEM-004                    |
 | AC-019 | Invalid timezone → exit 1                       | FR-018, INV-010                                      |
 | AC-020 | Missing or malformed reference now → exit 1     | FR-017, INV-010                                      |
-| AC-021 | Empty / whitespace input → clarify              | FR-007, INV-006, SEM-002                             |
-| AC-022 | Emoji-only input → clarify                      | FR-007, INV-006                                      |
+| AC-021 | Empty / whitespace input → clarify              | FR-007, FR-019, INV-006, SEM-002                     |
+| AC-022 | Emoji-only input → clarify                      | FR-007, FR-019, INV-006                              |
 | AC-023 | Input > 2000 chars → exit 1                     | FR-016, INV-010, INV-011                             |
 | AC-024 | Eval-run metadata recorded                      | FR-015                                               |
 
@@ -700,3 +730,7 @@ LLM-as-judge results are logged separately and do not affect binary check scores
 - The agent is stateless: each CLI invocation is independent. `intent=reschedule` and
   `intent=snooze` describe the user's intent and desired new time only; the agent does not
   access or modify any reminder storage.
+- The agent is designed for **English-language input only** in v1. Non-English requests are
+  explicitly out of scope; behavior for non-English input is undefined and no eval cases
+  exercise non-English inputs. SEM-002 keyword detection relies on English tokens and is
+  not valid for other languages.
