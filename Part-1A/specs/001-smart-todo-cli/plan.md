@@ -10,7 +10,8 @@ A Node.js 22+ CLI tool (`todo`) that lets a single developer manage tasks from t
 Tasks are persisted in a local JSON file (`{ "nextId", "tasks" }`) with atomic writes. Commands
 cover the full CRUD lifecycle plus tag management and status transitions. The implementation uses
 ES modules, commander, and plain JavaScript throughout. Quality gates — ESLint, Semgrep,
-eslint-plugin-security, npm audit, and Vitest with ≥85% line coverage — are enforced by an
+eslint-plugin-security, npm audit, and Vitest with ≥85% line coverage across all application
+code (`src/` and `bin/`, including subprocess-executed command modules) — are enforced by an
 independent harness runner that writes timestamped evidence artefacts.
 
 ## Technical Context
@@ -58,7 +59,7 @@ concern at this scope.
 | Principle | Gate | Design status |
 |---|---|---|
 | I. Code Quality & Static Analysis | ESLint 0 errors; Semgrep p/javascript + p/nodejs 0 ERR/WARN; eslint-plugin-security 0 ERR/WARN; npm audit 0 high/critical | ✅ All gates wired into `.harness/run-harness.js` in order lint → security → test |
-| II. Test Quality & Coverage | Vitest 100% mandatory tests pass; line coverage src/ ≥ 85% | ✅ `@vitest/coverage-v8` with `thresholds.lines: 85` enforced; CI fails below threshold |
+| II. Test Quality & Coverage | Vitest 100% mandatory tests pass; line coverage ≥ 85% across all application code (`src/` and `bin/`), including subprocess-executed command modules; no comment-only or placeholder source files | ✅ `@vitest/coverage-v8` with `thresholds.lines: 85` enforced; `autoAttachSubprocess: true` required in `vitest.config.js` to cover CLI command modules invoked via `execFile` in contract tests; CI fails below threshold |
 | III. Requirement Traceability | Every FR has ≥ 1 AC; every test references its AC ID | ✅ 57 ACs covering all 44 FRs; contract tests named and annotated with AC IDs |
 | IV. Persistence & Reliability | Local JSON only; atomic writes; corrupt/missing handled with exit 3 | ✅ `store.js` uses temp-file + `fs.rename`; schema validation on every read |
 | V. Security Constraints | No network, no secrets, no eval, no shell:true, no path traversal | ✅ No network calls; path validated in `store.js`; `execFile` without shell everywhere |
@@ -128,7 +129,7 @@ evidence/
 
 package.json             # "type":"module"; scripts: lint, security, test, harness
 eslint.config.js         # flat config; @eslint/js + eslint-plugin-security
-vitest.config.js         # coverage: v8, include: src/**, thresholds.lines: 85
+vitest.config.js         # coverage: v8, include: [src/**, bin/**], autoAttachSubprocess: true, thresholds.lines: 85
 ```
 
 **Structure Decision**: Single-project layout (Option 1). Source split into `store`, `validate`,

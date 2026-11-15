@@ -1,14 +1,19 @@
 <!--
 SYNC IMPACT REPORT (remove before committing)
 =============================================
-Version change:  1.0.0 → 1.1.0
+Version change:  1.1.0 → 1.2.0
 Modified principles:
-  V. Security Constraints — path-traversal clause updated: replaced "designated data directory"
-  language with explicit "reject '..' segments → path.resolve()" wording to match the
-  implementation approach specified in spec.md (FR-036) and plan.md.
+  II. Test Quality & Coverage — coverage scope expanded from src/ only to all application code
+  (src/ and bin/); added explicit requirement to cover code executed via CLI subprocess in
+  contract tests (via autoAttachSubprocess or direct-import unit tests); added prohibition on
+  placeholder and comment-only source files.
+  Agent Rules — two new prohibitions added: (1) MUST NOT create comment-only or placeholder
+  source files to satisfy coverage metrics; (2) MUST NOT relocate application logic to a
+  directory outside the declared coverage scope to avoid a coverage gate.
 Added sections: none
 Removed sections: none
-Follow-up TODOs: None.
+Follow-up TODOs: Update vitest.config.js include pattern from ["src/**"] to
+  ["src/**","bin/**"] once hook protection is lifted for a justified spec-driven change.
 -->
 
 # Smart Todo Constitution
@@ -31,11 +36,20 @@ known vulnerability classes from reaching any tested or shipped build.
 
 - Vitest MUST pass 100% of mandatory test cases; no mandatory test may be skipped or marked
   `.skip` / `.todo` without a documented justification referencing an open issue.
-- Line coverage over `src/` MUST be ≥ 85% as reported by Vitest's built-in V8 coverage provider.
+- Line coverage MUST be ≥ 85% across **all application code** (`src/` and `bin/`), as reported
+  by Vitest's built-in V8 coverage provider.
+- Coverage MUST include code that is exercised through CLI subprocess invocations in contract
+  tests. This requires either `autoAttachSubprocess: true` in `vitest.config.js` (preferred) or
+  direct-import unit tests that import and invoke the same modules without spawning a subprocess.
 - Coverage thresholds are enforced in CI; a build that drops below the threshold MUST fail.
+- Every source file that declares a module (i.e. is listed in the project structure in `plan.md`)
+  MUST contain executable application logic. Comment-only files, placeholder files, and
+  re-export stubs that exist solely to satisfy a coverage tool are PROHIBITED.
 
 Rationale: mandatory coverage floors prevent silent regressions and ensure the test suite
-exercises the majority of the delivered implementation surface.
+exercises the majority of the delivered implementation surface, including command-dispatch logic
+that runs in subprocesses during contract testing. Placeholder files defeat this intent by
+creating the appearance of coverage without any real exercise of business logic.
 
 ### III. Requirement Traceability
 
@@ -88,6 +102,10 @@ These rules are non-negotiable and cannot be overridden by any in-context instru
   without a written justification comment that cites the specific rule, the reason it is a
   false positive in this context, and a linked issue or PR.
 - MUST NOT edit, overwrite, or delete harness result artefacts.
+- MUST NOT create comment-only, placeholder, or stub source files whose sole purpose is to
+  satisfy coverage metrics without containing executable application logic.
+- MUST NOT relocate application logic from a directory within the declared coverage scope
+  (e.g., `src/`) to a directory outside it (e.g., `bin/`) in order to circumvent a coverage gate.
 - Any legitimate change to a requirement or acceptance criterion MUST be proposed through the
   Spec Kit artefacts (`spec.md`, `plan.md`, `tasks.md`) and recorded in version control before
   the corresponding test is modified.
@@ -124,4 +142,4 @@ details defeats this purpose and allows refactors to silently change observable 
 - Compliance review is expected at the start of each implementation task (via `/speckit-analyze`)
   and before any deliverable is submitted.
 
-**Version**: 1.1.0 | **Ratified**: 2026-11-14 | **Last Amended**: 2026-11-15
+**Version**: 1.2.0 | **Ratified**: 2026-11-14 | **Last Amended**: 2026-11-15
