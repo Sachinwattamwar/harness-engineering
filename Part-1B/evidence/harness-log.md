@@ -187,13 +187,92 @@ time strings, not attacker-controlled arbitrary input). **Accepted as a warning 
 
 ---
 
+## Run 3 — Security repair
+
+| Field | Value |
+|-------|-------|
+| Timestamp | 2026-11-20T06:55:40.599Z |
+| Evidence file | `evidence/harness-results/harness-1795157755490.json` |
+| Branch | `feature/part-1b-reminder-agent` |
+| Phase | B10 — repair cycle 1 |
+
+| Gate | Result | Notes |
+|------|--------|-------|
+| lint | **PASS** | 0 errors; 8 warnings unchanged |
+| security | **PASS** | semgrep 0 findings (0 blocking); `npm audit` 0 vulnerabilities |
+| test | **FAIL** | 2 failed, 67 passed (69 total) — same 2 pre-existing bugs in protected `tests/unit/llm/openai.test.js`; no new failures |
+
+**Overall: FAIL** — test gate
+
+### Evidence supplied
+
+Run 2 harness output: semgrep reported 1 blocking finding:
+
+```
+src/schema/validator.js
+❯❱ javascript.ajv.security.audit.ajv-allerrors-true.ajv-allerrors-true  ❰❰ Blocking ❱❱
+By setting `allErrors: true` in `Ajv` library, all error objects will be allocated
+without limit. This allows the attacker to produce a huge number of errors which can
+lead to denial of service. Do not use `allErrors: true` in production.
+  8┆ const ajv = new Ajv({ strict: false, allErrors: true });
+```
+
+Cross-reference: `.harness/schema-validator.js` (the harness's own Ajv instance, not
+modifiable) uses `new Ajv({ strict: false })` with no `allErrors` — confirming the CLI
+only needs the first validation error to know whether output is valid or not.
+
+### Root cause
+
+`src/schema/validator.js:8` initialised Ajv with `allErrors: true`, which instructs the
+validator to collect every error across the entire document before returning. For a 7-field
+output schema this is at most a handful of errors, but the semgrep rule fires on the flag
+unconditionally. The flag was unnecessary: the `validate()` function's callers (`src/agent.js`)
+only check `valid` (boolean) and pass the first error onward on failure — they do not iterate
+all errors or display them in bulk. Stopping at the first error is sufficient and matches the
+harness schema-validator's own behaviour.
+
+### Change made
+
+One-character edit to `src/schema/validator.js:8`:
+
+```diff
+- const ajv = new Ajv({ strict: false, allErrors: true });
++ const ajv = new Ajv({ strict: false });
+```
+
+No other files touched. All existing tests continue to pass (the validator's public API
+`validate(json) → { valid, errors }` is unchanged; `errors` is now the first error only
+rather than all errors, which no test asserts a count on).
+
+A secondary issue was discovered during this run: the `cp -r src bin prompts evidence/initial-generation/`
+command (run 2 snapshot step) copied `src/llm/adapter.test.js` into the evidence directory.
+Vitest discovered `evidence/initial-generation/src/llm/adapter.test.js` and tried to run it;
+it failed immediately with `Cannot find module '../../specs/...'` because the relative paths
+in the copied `openai.js` are wrong from that location. This added a third failure to the
+first run-3 attempt. Fix: deleted the copied test file from the evidence snapshot — test files
+are not implementation artefacts and should not be in `evidence/initial-generation/`.
+
+### Result
+
+| Gate | Before (Run 2) | After (Run 3) |
+|------|---------------|--------------|
+| lint | PASS | PASS |
+| security | **FAIL** (1 blocking finding) | **PASS** (0 findings) |
+| test | not reached | FAIL — 2 pre-existing bugs (unchanged) |
+
+Security gate repaired. Test gate remains blocked by 2 test-file bugs in the
+protected `tests/unit/llm/openai.test.js`. Those require human intervention to fix
+(lift hook, correct assertions, re-lock hook).
+
+---
+
 ## Decision
 
 **Status: OPEN — awaiting human ACCEPT / REJECT**
 
 Outstanding issues before ACCEPT:
-1. Security gate: `ajv-allerrors-true` in `src/schema/validator.js:8` must be resolved (remove `allErrors: true` or add justification)
-2. Two test bugs in `tests/unit/llm/openai.test.js` require hook-protected file edits
+1. ~~Security gate: `ajv-allerrors-true` in `src/schema/validator.js:8`~~ — **resolved in Run 3**
+2. Two test bugs in `tests/unit/llm/openai.test.js` require hook-protected file edits (test (c) wrong expected call count; T046 mock-reassignment pattern)
 3. `bin/` at 0 % coverage — structurally non-compliant with constitution; workaround or in-process test needed
 4. T055 (full eval run) and T059 (manual quickstart scenarios) remain unchecked
 
