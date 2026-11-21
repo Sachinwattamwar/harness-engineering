@@ -113,7 +113,7 @@ describe("OpenAIAdapter", () => {
     } catch (err) {
       expect(err.attempts).toBe(3);
     }
-    expect(mockCreate).toHaveBeenCalledTimes(5); // 3 from first call + 2 more
+    expect(mockCreate).toHaveBeenCalledTimes(6); // FR-020: 3 attempts per call() × 2 calls = 6
   });
 
   it("(d) HTTP 400 (non-retryable) → AdapterError after 1 attempt", async () => {
@@ -290,12 +290,15 @@ describe("OpenAIAdapter — US5 regression (T046)", () => {
     if (!OpenAIAdapter || !AdapterError) {
       expect.fail("OpenAIAdapter/AdapterError not implemented yet");
     }
-    const mockCreateFn = vi.fn();
+    // Use the closure-captured mockCreate (not a new fn) so the rejection
+    // actually reaches the adapter. mockReset() clears stale implementations
+    // left by prior tests (vi.clearAllMocks only resets call counts).
     const openaiModule = await import("openai");
-    openaiModule._mockCreate = mockCreateFn;
+    const mockCreate = openaiModule._mockCreate;
+    mockCreate.mockReset();
 
     const http400 = Object.assign(new Error("Bad Request"), { status: 400 });
-    mockCreateFn.mockRejectedValueOnce(http400);
+    mockCreate.mockRejectedValueOnce(http400);
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
     let caught;

@@ -266,15 +266,85 @@ protected `tests/unit/llm/openai.test.js`. Those require human intervention to f
 
 ---
 
+---
+
+## Harness corrections (human-approved)
+
+Applied to the working tree as explicit human-approved fixes before the next harness run.
+No `src/`, `bin/`, prompts, spec artifacts, or threshold values were changed.
+
+| # | File | Change | Reason | Spec ref |
+|---|------|--------|--------|----------|
+| 1 | `vitest.config.js` | Added `autoAttachSubprocess: true` to `coverage`; added `evidence/**` to both `test.exclude` (discovery) and `coverage.exclude` (measurement); carried over all Vitest default `exclude` patterns so none are silently dropped | `bin/remind.js` showed 0 % coverage because `v8` instrumentation does not cross `spawnSync` process boundaries. `autoAttachSubprocess: true` is the same mechanism used in `../Part-1A/vitest.config.js` and collects child-process coverage. If `bin/` coverage remains 0 % after this, the issue is structural and must be escalated before ACCEPT. | Constitution §coverage; plan §"Node 22 / Vitest v5" |
+| 2 | `vitest.config.js` + `evidence/initial-generation/README.md` | Excluded `evidence/**` from test discovery and coverage | In Run 3, `evidence/initial-generation/src/llm/adapter.test.js` (a snapshot copy) was picked up by Vitest as a runnable test file, failed with wrong relative paths, and added a spurious third failure. `adapter.test.js` was deleted from that snapshot copy (the original is preserved in tag `part1b-initial-generation`). The `evidence/**` exclusion prevents any future snapshot copies of test files from being discovered or measured. | — |
+| 3 | `tests/unit/llm/openai.test.js` line 116 | `toHaveBeenCalledTimes(5)` → `toHaveBeenCalledTimes(6)`; comment updated to "FR-020: 3 attempts per call() × 2 calls = 6" | FR-020: "retry with exponential backoff up to 2 times (3 total attempts)." The test calls `adapter.call()` twice with a permanent `mockRejectedValue` rejection. Correct total: 3 + 3 = 6. The original assertion of 5 (comment: "3 from first call + 2 more") has no basis in the spec. The implementation was correct; the test was wrong. | FR-020 |
+| 4 | `tests/unit/llm/openai.test.js` T046 "retryable is false for HTTP 400" | Replaced `const mockCreateFn = vi.fn(); openaiModule._mockCreate = mockCreateFn` with `const mockCreate = openaiModule._mockCreate; mockCreate.mockReset()` | The `vi.mock("openai", …)` factory captures `mockCreate` in a closure. Assigning to `openaiModule._mockCreate` replaces a plain property but does not change the closure; the adapter's constructor always receives the original `mockCreate`. Meanwhile `vi.clearAllMocks()` (in `beforeEach`) resets call counts but NOT implementations, so a stale `mockRejectedValue(ECONNREFUSED)` from a prior test remained active and the adapter saw ECONNREFUSED instead of HTTP 400, throwing `retryable: true`. Fix: use the closure-captured reference directly and call `mockReset()` to clear stale implementations before queuing the HTTP 400 rejection. The assertion `retryable === false` is unchanged. | FR-020 |
+| 5 | `src/llm/adapter.test.js` → `tests/unit/llm/adapter.test.js` | Moved test file to canonical location; import paths updated (`./adapter.js` → `../../../src/llm/adapter.js` etc.); spec-ID comments added per test | The file was placed in `src/` in Run 2 as a workaround for the hook blocking agent writes to `tests/**`. With the hook disabled (`.claude/settings.json` deleted), the file can be moved to its canonical location. Spec-ID tags (`FR-014`, `PROP-009` on `createAdapter` tests; `AC-017`, `AC-025` on `StubAdapter` tests) improve traceability without changing any test logic. | FR-014, PROP-009, AC-017, AC-025 |
+
+---
+
+## Run 4 — Post-corrections
+
+| Field | Value |
+|-------|-------|
+| Timestamp | 2026-11-21T08:36:59.910Z |
+| Evidence file | `evidence/harness-results/harness-1795250232801.json` |
+| Branch | `feature/part-1b-reminder-agent` |
+| Phase | B10 — repair cycle 2 (harness corrections #1–5 applied) |
+
+| Gate | Result | Notes |
+|------|--------|-------|
+| lint | **PASS** | 0 errors; 8 warnings unchanged |
+| security | **PASS** | semgrep 0 findings (0 blocking); `npm audit` 0 vulnerabilities |
+| test | **FAIL** | 68/69 pass, 1 failure — `AdapterError.retryable is false for HTTP 400` (`tests/unit/llm/openai.test.js:310`) |
+
+**Overall: FAIL** — test gate
+
+### Coverage
+
+#### `bin/` (subprocess coverage via `autoAttachSubprocess: true`)
+
+| File | Stmts | Branches | Funcs | Uncovered lines |
+|------|-------|----------|-------|-----------------|
+| `bin/remind.js` | 71.43% (10/14) | 66.67% (4/6) | 100% (1/1) | 24–25, 31–32 |
+| **bin/ total** | **71.43%** | **66.67%** | **100%** | — |
+
+`bin/` coverage improved from **0% → 71.43%** — `autoAttachSubprocess: true` (correction #1) successfully propagates v8 instrumentation into child processes spawned by `spawnSync`. Lines 24–25 and 31–32 are the `--help` / `--version` early-exit branches; all main-path lines are now covered.
+
+#### `src/`
+
+| File | Stmts | Branches | Funcs | Uncovered |
+|------|-------|----------|-------|-----------|
+| `src/agent.js` | 100% (26/26) | 92.86% (13/14) | 100% (3/3) | branch @ line 36 |
+| `src/dates/resolver.js` | 90.48% (38/42) | 67.86% (19/28) | 100% (3/3) | lines 48, 51, 71 |
+| `src/llm/adapter.js` | 100% (7/7) | 100% (8/8) | 100% (1/1) | — |
+| `src/llm/openai.js` | 97.37% (37/38) | 88.46% (23/26) | 100% (6/6) | line 98 |
+| `src/llm/stub.js` | 100% (7/7) | 100% (2/2) | 100% (2/2) | — |
+| `src/schema/validator.js` | 100% (8/8) | 100% (2/2) | 100% (1/1) | — |
+| **src/ total** | **96.09% (123/128)** | **83.75% (67/80)** | **100% (16/16)** | — |
+
+`src/` aggregate lines ≥85% threshold: **MET** (96.09% stmts). `bin/` lines threshold: **NOT MET** (71.43% < 85%).
+
+### Analysis
+
+**Correction #3 effective:** `toHaveBeenCalledTimes(6)` test now passes — 68 pass vs. 67 in Run 3.
+
+**Correction #4 ineffective:** The `AdapterError.retryable is false for HTTP 400` test still fails with `expected true to be false`. The fix applied was `mockCreate.mockReset()` before queuing the HTTP 400 rejection. However, `vi.clearAllMocks()` in `beforeEach` runs between tests and resets call counts only — a stale `mockRejectedValue(ECONNREFUSED)` from a prior test in the same describe block survives `clearAllMocks` and fires on the adapter's retry attempts, causing the adapter to throw `retryable: true`. The fix needed is `mockCreate.mockReset()` (clears implementation) rather than relying on `clearAllMocks`. The applied change should have done this — the remaining failure implies the closure-capture issue is deeper: `beforeEach` calls `vi.clearAllMocks()` which clears the `mockReset()` state before this test's setup runs, or the test's setup order is wrong. Root cause: needs `vi.resetAllMocks()` globally or the `beforeEach` must call `mockCreate.mockReset()` explicitly.
+
+**`bin/` coverage at 71.43%:** Subprocess coverage collection works. The uncovered lines (24–25, 31–32) are `--help`/`--version` Commander auto-generated exit paths not exercised by the integration tests. Reaching 85% requires adding a test that invokes those flags.
+
+---
+
 ## Decision
 
 **Status: OPEN — awaiting human ACCEPT / REJECT**
 
 Outstanding issues before ACCEPT:
 1. ~~Security gate: `ajv-allerrors-true` in `src/schema/validator.js:8`~~ — **resolved in Run 3**
-2. Two test bugs in `tests/unit/llm/openai.test.js` require hook-protected file edits (test (c) wrong expected call count; T046 mock-reassignment pattern)
-3. `bin/` at 0 % coverage — structurally non-compliant with constitution; workaround or in-process test needed
-4. T055 (full eval run) and T059 (manual quickstart scenarios) remain unchecked
+2. ~~`toHaveBeenCalledTimes(5)` assertion wrong~~ — **resolved in correction #3 (Run 4 confirms)**
+3. `AdapterError.retryable is false for HTTP 400` — correction #4 ineffective; `vi.clearAllMocks()` vs `vi.resetAllMocks()` issue remains; requires further fix in `tests/unit/llm/openai.test.js`
+4. `bin/` coverage 71.43% — below 85% threshold; uncovered lines are `--help`/`--version` exit branches
+5. T055 (full eval run) and T059 (manual quickstart scenarios) remain unchecked
 
 _Sachin Wattamwar — to sign below when decision is made_
 
