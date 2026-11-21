@@ -1,0 +1,22 @@
+{
+  "timestamp": "2026-11-21T11:23:03.376Z",
+  "gates": [
+    {
+      "gate": "lint",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "gate": "security",
+      "passed": true,
+      "exitCode": 0
+    },
+    {
+      "gate": "test",
+      "passed": false,
+      "exitCode": 1
+    }
+  ],
+  "result": "FAIL",
+  "failedGate": "test"
+}

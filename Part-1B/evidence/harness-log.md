@@ -623,3 +623,173 @@ Six FR-020 tests time out at 5000ms. The pattern is consistent with the `vi.fn()
 | T046 | 1 | 2 | +1 (backoff placeholder → real failing test) |
 | FR-020 | 7 | 6 | **−1** (BadRequestError now passes) |
 | **Total** | **12** | **8** | **−4** |
+
+---
+
+## Harness correction #10 (human-approved) — fake-timer isolation + 1000 ms base
+
+### Root causes
+
+**Bug A — fake-timer leak between tests (caused the Run 7 timeout cascade)**
+
+`vi.useFakeTimers()` was called inline inside the T046 "exponential backoff" test body, with the matching `vi.useRealTimers()` at the bottom of the same test. When the assertion `expect(delay1).toBeGreaterThan(0)` failed (see Bug B), Vitest threw immediately — execution never reached `vi.useRealTimers()`. Fake timers remained active for all subsequent tests in the T046 and FR-020 describe blocks. In those tests `adapter.call()` calls `sleep(RETRY_BASE_MS * 2^attempt)` which calls `setTimeout()`. With fake timers active and no `vi.runAllTimersAsync()` being called, those `setTimeout` callbacks never fired. The `adapter.call()` promise hung indefinitely until Vitest's 5000 ms per-test timeout killed it — causing the 6 FR-020 timeout failures and the T046 "retryable is true" timeout failure observed in Run 7.
+
+**Bug B — `RETRY_BASE_MS = 0` made fake-clock advancement impossible (caused `delay1 = 0`)**
+
+`src/llm/openai.js` contained `const RETRY_BASE_MS = process.env.VITEST ? 0 : 1000`. Vitest injects `process.env.VITEST`, so every retry delay was `sleep(0 * 2^attempt) = sleep(0)` → `setTimeout(resolve, 0)`. Under fake timers, a `setTimeout(..., 0)` fires at the same fake-clock tick at which it was registered; `Date.now()` before and after is identical. The backoff test recorded `attemptTimestamps[0] = 0` and `attemptTimestamps[1] = 0`, giving `delay1 = 0`, which failed `expect(delay1).toBeGreaterThan(0)`. That assertion failure triggered Bug A's leak.
+
+The two bugs are coupled: Bug B caused the assertion throw → Bug A caused the leak → Run 7's 7 subsequent test failures all trace back to Bug B.
+
+### Fix applied to `tests/unit/llm/openai.test.js`
+
+| Scope | Change |
+|-------|--------|
+| All 4 describe blocks (top-level `OpenAIAdapter`, T044, T046, FR-020) | Added `vi.useFakeTimers()` as the **first** statement of `beforeEach`; added `afterEach(() => vi.useRealTimers())` so fake timers are always restored even when an assertion throws mid-test |
+| Every `adapter.call()` invocation in all 4 blocks | Split `const result = await adapter.call(...)` into three sequential steps: `const promise = adapter.call(...)` → `await vi.runAllTimersAsync()` → `const result = await promise`. Two-call tests (test `(c)`) apply `vi.runAllTimersAsync()` before each `await`. |
+| T046 backoff test | Removed the inline `vi.useFakeTimers()` and `vi.useRealTimers()` calls (now handled by beforeEach/afterEach) |
+| T044 — `beforeEach` | Added `vi.useFakeTimers()`; existing `vi.clearAllMocks()` + `mockCreate.mockReset()` retained |
+| T046 — `beforeEach` | Added `vi.useFakeTimers()`; existing `vi.clearAllMocks()` + `mockCreate.mockReset()` retained |
+| FR-020 — `beforeEach` | Added `vi.useFakeTimers()`; existing `vi.clearAllMocks()` + `mockCreate.mockReset()` retained |
+
+No `expect(...)` assertions were changed. No `src/`, `bin/`, spec, or threshold files were touched.
+
+The tests are written to pass with `RETRY_BASE_MS = 1000` (the implementation will remove the `process.env.VITEST` guard as a companion change). With `vi.useFakeTimers()` active, `vi.runAllTimersAsync()` advances fake time through 1000 ms + 2000 ms of sleep delays, so the entire 3-attempt retry sequence completes without real elapsed time. The backoff test records `Date.now()` timestamps at t = 0, t = 1000, t = 3000 (fake ms), giving `delay1 = 1000`, `delay2 = 2000`, both satisfying `delay2 > delay1 > 0`.
+
+---
+
+## Human review finding — RETRY_BASE_MS test-environment guard
+
+`src/llm/openai.js` contained `const RETRY_BASE_MS = process.env.VITEST ? 0 : 1000`.
+Vitest injects `process.env.VITEST`, so every test run set the backoff base to 0 ms.
+Every `sleep(0 * 2^attempt)` call resolved in the same fake-clock tick, making
+`Date.now()` return the same value before and after each delay. The backoff test
+therefore measured `delay1 = 0` and failed `expect(delay1).toBeGreaterThan(0)`.
+More critically, the real 1000 ms / 2000 ms timing was never exercised in any test run.
+
+**Fix:** Removed the `process.env.VITEST` conditional; `RETRY_BASE_MS` is now the
+unconditional value `1000`. Tests use `vi.useFakeTimers()` + `vi.runAllTimersAsync()`
+to advance fake time through the full 1000 ms + 2000 ms delays without real elapsed time.
+Production code must not detect or special-case the test runner.
+
+---
+
+### Integration / subprocess tests that reach a retry path
+
+**None.** Every test in `tests/integration/cli.test.js` explicitly sets `LLM_PROVIDER=stub`, which routes through `StubAdapter`. `StubAdapter` has no retry logic; it returns the value of `STUB_RESPONSE` or reads a fixture file and returns immediately. The `OpenAIAdapter` retry path (`sleep` → exponential back-off) is never exercised by any subprocess test.
+
+If a subprocess test did trigger OpenAI retries with a 1000 ms base, the real elapsed time per test would be:
+- 1 retry (fail + succeed on 2nd): `sleep(1000)` → **~1 s**
+- 2 retries (fail + fail + succeed on 3rd): `sleep(1000) + sleep(2000)` → **~3 s**
+- 3 retries all fail: same `sleep(1000) + sleep(2000)` → **~3 s** (third attempt throws immediately after last sleep)
+
+The CLI's 15 s `spawnSync` timeout (and the `npm run eval` test's 30 s timeout) would accommodate these durations, but the scenario does not arise in the current test suite.
+
+---
+
+## Run 8 — Remove RETRY_BASE_MS test-environment guard
+
+| Field | Value |
+|-------|-------|
+| Timestamp | 2026-11-21T11:23:03.376Z |
+| Evidence file | `evidence/harness-results/harness-1795260195470.json` |
+| Branch | `feature/part-1b-reminder-agent` |
+| Phase | B10 — repair cycle 6 (`RETRY_BASE_MS` guard removed from `src/llm/openai.js`) |
+
+| Gate | Result | Notes |
+|------|--------|-------|
+| lint | **PASS** | 0 errors; 8 warnings unchanged |
+| security | **PASS** | semgrep 0 findings (0 blocking); `npm audit` 0 vulnerabilities |
+| test | **FAIL** | 77/77 test assertions pass; Vitest exits code 1 due to 14 `PromiseRejectionHandledWarning` notices counted as "Errors" |
+
+**Overall: FAIL** — test gate (Vitest process exit code 1 from unhandled rejection warnings)
+
+**Total suite duration: 4.27 s** (tests 86 %, import 9 %, transform 3 %, worker 2 %)
+
+### Coverage
+
+```
+---------------|---------|----------|---------|---------|-------------------
+File           | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s
+---------------|---------|----------|---------|---------|-------------------
+All files      |   93.42 |      84  |     100 |   94.16 |
+ bin           |   71.42 |    66.66 |     100 |   71.42 |
+  remind.js    |   71.42 |    66.66 |     100 |   71.42 | 24-25,31-32
+ src           |     100 |    92.85 |     100 |     100 | 36
+  agent.js     |     100 |    92.85 |     100 |     100 | 36
+ src/dates     |   90.47 |    67.85 |     100 |    92.3 |
+  resolver.js  |   90.47 |    67.85 |     100 |    92.3 | 48,51,71
+ src/llm       |   96.77 |      92  |     100 |   98.03 |
+  openai.js    |   95.83 |      90  |     100 |   97.29 | 131
+---------------|---------|----------|---------|---------|-------------------
+
+=============================== Coverage summary ===============================
+Statements   : 93.42% ( 142/152 )
+Branches     : 84.00% ( 84/100 )
+Functions    : 100% ( 17/17 )
+Lines        : 94.16% ( 129/137 )
+================================================================================
+```
+
+**Overall line coverage (src/ + bin/) — 85% threshold:** `Lines : 94.16% ( 129/137 )` — **PASS**
+
+`openai.js` branch coverage improved from **88.09% (Run 7) → 90%** — the real 1000 ms + 2000 ms delay paths are now exercised by the fake-timer tests.
+
+### T044 — OpenAIAdapter — US5 retry behaviour (all 4 PASS)
+
+| Test | Result |
+|------|--------|
+| all 3 ECONNREFUSED → AdapterError with attempts=3 | **PASS** |
+| HTTP 400 → AdapterError after 1 attempt, no retry | **PASS** |
+| HTTP 429 → retried | **PASS** |
+| HTTP 500 → retried | **PASS** |
+
+### T046 — OpenAIAdapter — US5 regression (all 3 PASS) ← improvement from Run 7
+
+| Test | Result | Run 7 result |
+|------|--------|--------------|
+| exponential backoff: each retry waits longer than the previous | **PASS** | FAIL (`delay1 = 0`) |
+| AdapterError.retryable is true for ECONNREFUSED | **PASS** | FAIL (TestTimeoutError) |
+| AdapterError.retryable is false for HTTP 400 | **PASS** | PASS |
+
+**Root cause of Run 7 failures — resolved:** With `RETRY_BASE_MS = 0`, `sleep(0)` resolves in the same fake-clock tick; `Date.now()` returned identical values before and after each sleep, so `delay1 = 0`. The failed assertion threw before `vi.useRealTimers()` could run, leaving fake timers active for all subsequent tests, which caused `adapter.call()` sleeps to hang indefinitely (the `TestTimeoutError` cascade). With `RETRY_BASE_MS = 1000`, fake timers advance through 1000 ms + 2000 ms and both tests complete correctly.
+
+### FR-020 — real SDK error classes (all 8 PASS) ← improvement from Run 7
+
+| Test | Result | Run 7 result |
+|------|--------|--------------|
+| client is constructed with maxRetries: 0 | **PASS** | PASS |
+| APIConnectionError with ECONNREFUSED cause → retryable: true | **PASS** | FAIL (TestTimeoutError) |
+| APIUserAbortError → retryable: true | **PASS** | FAIL (TestTimeoutError) |
+| APIConnectionTimeoutError → retryable: true | **PASS** | FAIL (TestTimeoutError) |
+| RateLimitError (HTTP 429) → retryable: true | **PASS** | FAIL (TestTimeoutError) |
+| InternalServerError (HTTP 500) → retryable: true | **PASS** | FAIL (TestTimeoutError) |
+| NotFoundError with code model_not_found → retryable: true | **PASS** | FAIL (TestTimeoutError) |
+| BadRequestError (HTTP 400) → retryable: false, attempts: 1 | **PASS** | PASS |
+
+All 6 Run 7 timeouts resolved: the leaked fake timers (caused by Bug A/B) no longer occur because Bug B (`delay1 = 0`) is fixed by the `RETRY_BASE_MS = 1000` change.
+
+### Root cause of remaining FAIL (harness test gate)
+
+**14 `PromiseRejectionHandledWarning` notices — Vitest exits code 1.**
+
+The pattern used in the tests (correction #10):
+```js
+const promise = adapter.call(...);    // promise created; rejection will occur
+await vi.runAllTimersAsync();         // timers fire → adapter finishes → promise rejects HERE
+let caught;
+try { await promise; } catch (e) { caught = e; }  // rejection caught here
+```
+
+Between `vi.runAllTimersAsync()` resolving and `await promise`, the rejection is briefly "unhandled" in Node.js's view. Node emits `unhandledRejection`, then emits `rejectionHandled` when `await promise` catches it. Vitest's global hook picks up each `unhandledRejection` event and appends it to the "Errors" list; the matching `rejectionHandled` events are what generate `PromiseRejectionHandledWarning` in stderr. With 14 such test cases across the 4 describe blocks, Vitest counts 14 errors and exits with code 1 even though every assertion passed.
+
+This is inherent to the test-pattern interaction between fake timers and async rejection handling; it cannot be resolved from `src/llm/openai.js`. Requires a test-side fix in the protected `openai.test.js` (e.g. wrapping `adapter.call()` in `expect(...).rejects.toBeInstanceOf(...)` directly rather than the try/catch split, or using `Promise.prototype.catch` to register the handler before advancing timers).
+
+### Change vs Run 7
+
+| Suite | Run 7 results | Run 8 results | Delta |
+|-------|--------------|--------------|-------|
+| OpenAIAdapter (base) | 5 pass | 5 pass | 0 |
+| T044 | 4 pass | 4 pass | 0 |
+| T046 | 1 pass, 2 fail | 3 pass | **+2** |
+| FR-020 | 2 pass, 6 fail | 8 pass | **+6** |
+| **Total** | **69 pass, 8 fail** | **77 pass, 0 fail** | **+8** |

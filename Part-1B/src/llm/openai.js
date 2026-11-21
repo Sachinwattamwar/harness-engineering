@@ -53,7 +53,7 @@ function isRetryable(err) {
   return false;
 }
 
-const RETRY_BASE_MS = process.env.VITEST ? 0 : 1000;
+const RETRY_BASE_MS = 1000;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));

@@ -59,6 +59,7 @@ describe("OpenAIAdapter", () => {
   let mockCreate;
 
   beforeEach(async () => {
+    vi.useFakeTimers();
     vi.clearAllMocks();
     const openaiModule = await import("openai");
     mockCreate = openaiModule._mockCreate;
@@ -66,6 +67,7 @@ describe("OpenAIAdapter", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it("(a) successful call returns parsed output + metadata", async () => {
@@ -82,7 +84,9 @@ describe("OpenAIAdapter", () => {
     });
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
-    const result = await adapter.call("system prompt", "user message");
+    const promise = adapter.call("system prompt", "user message");
+    await vi.runAllTimersAsync();
+    const result = await promise;
 
     expect(result.output).toEqual(MOCK_OUTPUT);
     expect(result.meta).toMatchObject({
@@ -109,7 +113,9 @@ describe("OpenAIAdapter", () => {
       });
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
-    const result = await adapter.call("system", "user");
+    const promise = adapter.call("system", "user");
+    await vi.runAllTimersAsync();
+    const result = await promise;
     expect(result.output).toEqual(MOCK_OUTPUT);
     expect(mockCreate).toHaveBeenCalledTimes(3);
   });
@@ -124,9 +130,13 @@ describe("OpenAIAdapter", () => {
     mockCreate.mockRejectedValue(connErr);
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
-    await expect(adapter.call("system", "user")).rejects.toBeInstanceOf(AdapterError);
+    const p1 = adapter.call("system", "user");
+    await vi.runAllTimersAsync();
+    await expect(p1).rejects.toBeInstanceOf(AdapterError);
+    const p2 = adapter.call("system", "user");
+    await vi.runAllTimersAsync();
     try {
-      await adapter.call("system", "user");
+      await p2;
     } catch (err) {
       expect(err.attempts).toBe(3);
     }
@@ -141,7 +151,9 @@ describe("OpenAIAdapter", () => {
     mockCreate.mockRejectedValueOnce(http400);
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
-    await expect(adapter.call("system", "user")).rejects.toBeInstanceOf(AdapterError);
+    const promise = adapter.call("system", "user");
+    await vi.runAllTimersAsync();
+    await expect(promise).rejects.toBeInstanceOf(AdapterError);
     expect(mockCreate).toHaveBeenCalledTimes(1);
   });
 
@@ -160,8 +172,9 @@ describe("OpenAIAdapter", () => {
       });
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
-    // Should retry after timeout
-    const result = await adapter.call("system", "user");
+    const promise = adapter.call("system", "user");
+    await vi.runAllTimersAsync();
+    const result = await promise;
     expect(result.output).toEqual(MOCK_OUTPUT);
     expect(mockCreate).toHaveBeenCalledTimes(2);
   });
@@ -171,10 +184,15 @@ describe("OpenAIAdapter — US5 retry behaviour (T044)", () => {
   let mockCreate;
 
   beforeEach(async () => {
+    vi.useFakeTimers();
     vi.clearAllMocks();
     const openaiModule = await import("openai");
     mockCreate = openaiModule._mockCreate;
     mockCreate.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("all 3 ECONNREFUSED → AdapterError with attempts=3", async () => {
@@ -187,9 +205,11 @@ describe("OpenAIAdapter — US5 retry behaviour (T044)", () => {
     mockCreate.mockRejectedValue(connErr);
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
+    const promise = adapter.call("system", "user");
+    await vi.runAllTimersAsync();
     let caught;
     try {
-      await adapter.call("system", "user");
+      await promise;
     } catch (err) {
       caught = err;
     }
@@ -205,9 +225,11 @@ describe("OpenAIAdapter — US5 retry behaviour (T044)", () => {
     mockCreate.mockRejectedValueOnce(http400);
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
+    const promise = adapter.call("system", "user");
+    await vi.runAllTimersAsync();
     let caught;
     try {
-      await adapter.call("system", "user");
+      await promise;
     } catch (err) {
       caught = err;
     }
@@ -229,7 +251,9 @@ describe("OpenAIAdapter — US5 retry behaviour (T044)", () => {
       });
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
-    const result = await adapter.call("system", "user");
+    const promise = adapter.call("system", "user");
+    await vi.runAllTimersAsync();
+    const result = await promise;
     expect(result.output).toEqual(MOCK_OUTPUT);
     expect(mockCreate).toHaveBeenCalledTimes(2);
   });
@@ -247,7 +271,9 @@ describe("OpenAIAdapter — US5 retry behaviour (T044)", () => {
       });
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
-    const result = await adapter.call("system", "user");
+    const promise = adapter.call("system", "user");
+    await vi.runAllTimersAsync();
+    const result = await promise;
     expect(result.output).toEqual(MOCK_OUTPUT);
     expect(mockCreate).toHaveBeenCalledTimes(2);
   });
@@ -257,17 +283,21 @@ describe("OpenAIAdapter — US5 regression (T046)", () => {
   let mockCreate;
 
   beforeEach(async () => {
+    vi.useFakeTimers();
     vi.clearAllMocks();
     const openaiModule = await import("openai");
     mockCreate = openaiModule._mockCreate;
     mockCreate.mockReset();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("exponential backoff: each retry waits longer than the previous", async () => {
     if (!OpenAIAdapter) {
       expect.fail("OpenAIAdapter not implemented yet");
     }
-    vi.useFakeTimers();
 
     const connErr = Object.assign(new Error("ECONNREFUSED"), { code: "ECONNREFUSED" });
     const attemptTimestamps = [];
@@ -293,8 +323,6 @@ describe("OpenAIAdapter — US5 regression (T046)", () => {
     const delay2 = attemptTimestamps[2] - attemptTimestamps[1];
     expect(delay1).toBeGreaterThan(0);
     expect(delay2).toBeGreaterThan(delay1);
-
-    vi.useRealTimers();
   });
 
   it("AdapterError.retryable is true for ECONNREFUSED", async () => {
@@ -306,9 +334,11 @@ describe("OpenAIAdapter — US5 regression (T046)", () => {
     mockCreate.mockRejectedValue(connErr);
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
+    const promise = adapter.call("system", "user");
+    await vi.runAllTimersAsync();
     let caught;
     try {
-      await adapter.call("system", "user");
+      await promise;
     } catch (err) {
       caught = err;
     }
@@ -326,9 +356,11 @@ describe("OpenAIAdapter — US5 regression (T046)", () => {
     mockCreate.mockRejectedValueOnce(http400);
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
+    const promise = adapter.call("system", "user");
+    await vi.runAllTimersAsync();
     let caught;
     try {
-      await adapter.call("system", "user");
+      await promise;
     } catch (err) {
       caught = err;
     }
@@ -345,10 +377,15 @@ describe("OpenAIAdapter — FR-020 real SDK error classes", () => {
   let mockCreate;
 
   beforeEach(async () => {
+    vi.useFakeTimers();
     vi.clearAllMocks();
     const openaiModule = await import("openai");
     mockCreate = openaiModule._mockCreate;
     mockCreate.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("client is constructed with maxRetries: 0 (FR-020)", async () => {
@@ -372,9 +409,11 @@ describe("OpenAIAdapter — FR-020 real SDK error classes", () => {
     mockCreate.mockRejectedValue(sdkErr);
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
+    const promise = adapter.call("system", "user");
+    await vi.runAllTimersAsync();
     let caught;
     try {
-      await adapter.call("system", "user");
+      await promise;
     } catch (err) {
       caught = err;
     }
@@ -391,9 +430,11 @@ describe("OpenAIAdapter — FR-020 real SDK error classes", () => {
     mockCreate.mockRejectedValue(sdkErr);
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
+    const promise = adapter.call("system", "user");
+    await vi.runAllTimersAsync();
     let caught;
     try {
-      await adapter.call("system", "user");
+      await promise;
     } catch (err) {
       caught = err;
     }
@@ -410,9 +451,11 @@ describe("OpenAIAdapter — FR-020 real SDK error classes", () => {
     mockCreate.mockRejectedValue(sdkErr);
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
+    const promise = adapter.call("system", "user");
+    await vi.runAllTimersAsync();
     let caught;
     try {
-      await adapter.call("system", "user");
+      await promise;
     } catch (err) {
       caught = err;
     }
@@ -434,9 +477,11 @@ describe("OpenAIAdapter — FR-020 real SDK error classes", () => {
     mockCreate.mockRejectedValue(sdkErr);
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
+    const promise = adapter.call("system", "user");
+    await vi.runAllTimersAsync();
     let caught;
     try {
-      await adapter.call("system", "user");
+      await promise;
     } catch (err) {
       caught = err;
     }
@@ -458,9 +503,11 @@ describe("OpenAIAdapter — FR-020 real SDK error classes", () => {
     mockCreate.mockRejectedValue(sdkErr);
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
+    const promise = adapter.call("system", "user");
+    await vi.runAllTimersAsync();
     let caught;
     try {
-      await adapter.call("system", "user");
+      await promise;
     } catch (err) {
       caught = err;
     }
@@ -482,9 +529,11 @@ describe("OpenAIAdapter — FR-020 real SDK error classes", () => {
     mockCreate.mockRejectedValue(sdkErr);
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
+    const promise = adapter.call("system", "user");
+    await vi.runAllTimersAsync();
     let caught;
     try {
-      await adapter.call("system", "user");
+      await promise;
     } catch (err) {
       caught = err;
     }
@@ -506,9 +555,11 @@ describe("OpenAIAdapter — FR-020 real SDK error classes", () => {
     mockCreate.mockRejectedValueOnce(sdkErr);
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
+    const promise = adapter.call("system", "user");
+    await vi.runAllTimersAsync();
     let caught;
     try {
-      await adapter.call("system", "user");
+      await promise;
     } catch (err) {
       caught = err;
     }
