@@ -5,6 +5,18 @@
  * Covers: FR-013, FR-014, FR-020, PROP-007, INV-010
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+// Real SDK error classes — available via the mock because vi.mock spreads vi.importActual("openai").
+// The same classes are exported from "openai" and "openai/error.mjs" (identical references),
+// so instanceof checks in src/llm/openai.js work correctly with these test instances.
+import {
+  APIConnectionError,
+  APIUserAbortError,
+  APIConnectionTimeoutError,
+  RateLimitError,
+  InternalServerError,
+  NotFoundError,
+  BadRequestError,
+} from "openai";
 
 // Will fail until src/llm/openai.js exists
 let OpenAIAdapter, AdapterError;
@@ -24,9 +36,14 @@ const MOCK_OUTPUT = {
   refusal_reason: null,
 };
 
-vi.mock("openai", () => {
+// Spread vi.importActual so the real SDK error classes are accessible as named exports
+// from the mocked "openai" module (enabling the static imports above). The default export
+// (OpenAI constructor) is still replaced with a vi.fn() that returns a fake client.
+vi.mock("openai", async () => {
+  const actual = await vi.importActual("openai");
   const mockCreate = vi.fn();
   return {
+    ...actual,
     default: vi.fn().mockImplementation(() => ({
       chat: {
         completions: {
@@ -154,7 +171,9 @@ describe("OpenAIAdapter — US5 retry behaviour (T044)", () => {
   let mockCreate;
 
   beforeEach(async () => {
-    vi.clearAllMocks();
+    // resetAllMocks clears both call counts AND queued implementations; clearAllMocks
+    // only resets call counts, leaving stale mockRejectedValue() active across tests.
+    vi.resetAllMocks();
     const openaiModule = await import("openai");
     mockCreate = openaiModule._mockCreate;
   });
@@ -236,19 +255,28 @@ describe("OpenAIAdapter — US5 retry behaviour (T044)", () => {
 });
 
 describe("OpenAIAdapter — US5 regression (T046)", () => {
+  let mockCreate;
+
+  beforeEach(async () => {
+    // resetAllMocks clears implementations set by prior tests; this is what was
+    // missing before — a stale mockRejectedValue(ECONNREFUSED) survived vi.clearAllMocks()
+    // and caused "retryable is false for HTTP 400" to see ECONNREFUSED instead.
+    vi.resetAllMocks();
+    const openaiModule = await import("openai");
+    mockCreate = openaiModule._mockCreate;
+  });
+
   it("backoff delays are 1000ms and 2000ms using fake timers", async () => {
     if (!OpenAIAdapter || !AdapterError) {
       expect.fail("OpenAIAdapter/AdapterError not implemented yet");
     }
-    // Verify via fake timers that exponential backoff is applied correctly
+    // Verify via fake timers that exponential backoff is applied correctly.
+    // Uses closure-captured mockCreate (not a reassigned _mockCreate property).
     vi.useFakeTimers();
-    const mockCreateFn = vi.fn();
-    const openaiModule = await import("openai");
-    openaiModule._mockCreate = mockCreateFn;
 
     const connErr = Object.assign(new Error("ECONNREFUSED"), { code: "ECONNREFUSED" });
     let attempt = 0;
-    mockCreateFn.mockImplementation(() => {
+    mockCreate.mockImplementation(() => {
       attempt++;
       if (attempt < 3) {
         return Promise.reject(connErr);
@@ -269,12 +297,9 @@ describe("OpenAIAdapter — US5 regression (T046)", () => {
     if (!OpenAIAdapter || !AdapterError) {
       expect.fail("OpenAIAdapter/AdapterError not implemented yet");
     }
-    const mockCreateFn = vi.fn();
-    const openaiModule = await import("openai");
-    openaiModule._mockCreate = mockCreateFn;
-
+    // Uses closure-captured mockCreate — the same fn the adapter's client calls.
     const connErr = Object.assign(new Error("ECONNREFUSED"), { code: "ECONNREFUSED" });
-    mockCreateFn.mockRejectedValue(connErr);
+    mockCreate.mockRejectedValue(connErr);
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
     let caught;
@@ -290,13 +315,9 @@ describe("OpenAIAdapter — US5 regression (T046)", () => {
     if (!OpenAIAdapter || !AdapterError) {
       expect.fail("OpenAIAdapter/AdapterError not implemented yet");
     }
-    // Use the closure-captured mockCreate (not a new fn) so the rejection
-    // actually reaches the adapter. mockReset() clears stale implementations
-    // left by prior tests (vi.clearAllMocks only resets call counts).
-    const openaiModule = await import("openai");
-    const mockCreate = openaiModule._mockCreate;
-    mockCreate.mockReset();
-
+    // Uses closure-captured mockCreate (not a new fn) so the rejection actually
+    // reaches the adapter. beforeEach's vi.resetAllMocks() clears any stale
+    // implementation from prior tests before we queue the HTTP 400 rejection.
     const http400 = Object.assign(new Error("Bad Request"), { status: 400 });
     mockCreate.mockRejectedValueOnce(http400);
 
@@ -308,5 +329,187 @@ describe("OpenAIAdapter — US5 regression (T046)", () => {
       caught = err;
     }
     expect(caught.retryable).toBe(false);
+  });
+});
+
+// FR-020: tests that use real SDK error classes to verify isRetryable() against production
+// error shapes. The old mocks used raw Error objects with explicit .code/.status/.name
+// properties that mirrored the implementation, hiding the fact that the SDK wraps every
+// error in its own class hierarchy where .name === "Error" and .code is on .cause for
+// connection errors. These tests use the actual installed openai SDK error constructors.
+describe("OpenAIAdapter — FR-020 real SDK error classes", () => {
+  let mockCreate;
+
+  beforeEach(async () => {
+    vi.resetAllMocks();
+    const openaiModule = await import("openai");
+    mockCreate = openaiModule._mockCreate;
+  });
+
+  it("client is constructed with maxRetries: 0 (FR-020)", async () => {
+    if (!OpenAIAdapter) {
+      expect.fail("OpenAIAdapter not implemented yet");
+    }
+    const openaiModule = await import("openai");
+    const MockOpenAI = openaiModule.default;
+    new OpenAIAdapter({ model: "gpt-4o-mini" });
+    expect(MockOpenAI).toHaveBeenCalledWith({ maxRetries: 0 });
+  });
+
+  it("APIConnectionError with ECONNREFUSED cause → retryable: true (FR-020)", async () => {
+    if (!OpenAIAdapter || !AdapterError) {
+      expect.fail("OpenAIAdapter/AdapterError not implemented yet");
+    }
+    const cause = Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:443"), {
+      code: "ECONNREFUSED",
+    });
+    const sdkErr = new APIConnectionError({ message: "Connection refused", cause });
+    mockCreate.mockRejectedValue(sdkErr);
+
+    const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
+    let caught;
+    try {
+      await adapter.call("system", "user");
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(AdapterError);
+    expect(caught.retryable).toBe(true);
+    expect(caught.attempts).toBe(3);
+  });
+
+  it("APIUserAbortError → retryable: true (FR-020)", async () => {
+    if (!OpenAIAdapter || !AdapterError) {
+      expect.fail("OpenAIAdapter/AdapterError not implemented yet");
+    }
+    const sdkErr = new APIUserAbortError();
+    mockCreate.mockRejectedValue(sdkErr);
+
+    const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
+    let caught;
+    try {
+      await adapter.call("system", "user");
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(AdapterError);
+    expect(caught.retryable).toBe(true);
+    expect(caught.attempts).toBe(3);
+  });
+
+  it("APIConnectionTimeoutError → retryable: true (FR-020)", async () => {
+    if (!OpenAIAdapter || !AdapterError) {
+      expect.fail("OpenAIAdapter/AdapterError not implemented yet");
+    }
+    const sdkErr = new APIConnectionTimeoutError();
+    mockCreate.mockRejectedValue(sdkErr);
+
+    const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
+    let caught;
+    try {
+      await adapter.call("system", "user");
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(AdapterError);
+    expect(caught.retryable).toBe(true);
+    expect(caught.attempts).toBe(3);
+  });
+
+  it("RateLimitError (HTTP 429) → retryable: true (FR-020)", async () => {
+    if (!OpenAIAdapter || !AdapterError) {
+      expect.fail("OpenAIAdapter/AdapterError not implemented yet");
+    }
+    const sdkErr = new RateLimitError(
+      429,
+      { message: "rate limit exceeded" },
+      "rate limit exceeded",
+      {}
+    );
+    mockCreate.mockRejectedValue(sdkErr);
+
+    const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
+    let caught;
+    try {
+      await adapter.call("system", "user");
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(AdapterError);
+    expect(caught.retryable).toBe(true);
+    expect(caught.attempts).toBe(3);
+  });
+
+  it("InternalServerError (HTTP 500) → retryable: true (FR-020)", async () => {
+    if (!OpenAIAdapter || !AdapterError) {
+      expect.fail("OpenAIAdapter/AdapterError not implemented yet");
+    }
+    const sdkErr = new InternalServerError(
+      500,
+      { message: "internal server error" },
+      "internal server error",
+      {}
+    );
+    mockCreate.mockRejectedValue(sdkErr);
+
+    const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
+    let caught;
+    try {
+      await adapter.call("system", "user");
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(AdapterError);
+    expect(caught.retryable).toBe(true);
+    expect(caught.attempts).toBe(3);
+  });
+
+  it("NotFoundError with code model_not_found → retryable: true (FR-020)", async () => {
+    if (!OpenAIAdapter || !AdapterError) {
+      expect.fail("OpenAIAdapter/AdapterError not implemented yet");
+    }
+    const sdkErr = new NotFoundError(
+      404,
+      { code: "model_not_found", message: "The model does not exist" },
+      "The model does not exist",
+      {}
+    );
+    mockCreate.mockRejectedValue(sdkErr);
+
+    const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
+    let caught;
+    try {
+      await adapter.call("system", "user");
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(AdapterError);
+    expect(caught.retryable).toBe(true);
+    expect(caught.attempts).toBe(3);
+  });
+
+  it("BadRequestError (HTTP 400) → retryable: false, attempts: 1 (FR-020)", async () => {
+    if (!OpenAIAdapter || !AdapterError) {
+      expect.fail("OpenAIAdapter/AdapterError not implemented yet");
+    }
+    const sdkErr = new BadRequestError(
+      400,
+      { message: "bad request" },
+      "bad request",
+      {}
+    );
+    mockCreate.mockRejectedValueOnce(sdkErr);
+
+    const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
+    let caught;
+    try {
+      await adapter.call("system", "user");
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(AdapterError);
+    expect(caught.retryable).toBe(false);
+    expect(caught.attempts).toBe(1);
+    expect(mockCreate).toHaveBeenCalledTimes(1);
   });
 });
