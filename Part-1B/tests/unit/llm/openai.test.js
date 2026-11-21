@@ -131,15 +131,15 @@ describe("OpenAIAdapter", () => {
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
     const p1 = adapter.call("system", "user");
+    const assertion1 = expect(p1).rejects.toBeInstanceOf(AdapterError);
     await vi.runAllTimersAsync();
-    await expect(p1).rejects.toBeInstanceOf(AdapterError);
+    await assertion1;
     const p2 = adapter.call("system", "user");
+    const result2 = p2.catch(e => e);
     await vi.runAllTimersAsync();
-    try {
-      await p2;
-    } catch (err) {
-      expect(err.attempts).toBe(3);
-    }
+    const err2 = await result2;
+    expect(err2).toBeInstanceOf(AdapterError);
+    expect(err2.attempts).toBe(3);
     expect(mockCreate).toHaveBeenCalledTimes(6); // FR-020: 3 attempts per call() × 2 calls = 6
   });
 
@@ -152,8 +152,9 @@ describe("OpenAIAdapter", () => {
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
     const promise = adapter.call("system", "user");
+    const assertion = expect(promise).rejects.toBeInstanceOf(AdapterError);
     await vi.runAllTimersAsync();
-    await expect(promise).rejects.toBeInstanceOf(AdapterError);
+    await assertion;
     expect(mockCreate).toHaveBeenCalledTimes(1);
   });
 
@@ -206,13 +207,9 @@ describe("OpenAIAdapter — US5 retry behaviour (T044)", () => {
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
     const promise = adapter.call("system", "user");
+    const result = promise.catch(e => e);
     await vi.runAllTimersAsync();
-    let caught;
-    try {
-      await promise;
-    } catch (err) {
-      caught = err;
-    }
+    const caught = await result;
     expect(caught).toBeInstanceOf(AdapterError);
     expect(caught.attempts).toBe(3);
   });
@@ -226,13 +223,9 @@ describe("OpenAIAdapter — US5 retry behaviour (T044)", () => {
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
     const promise = adapter.call("system", "user");
+    const result = promise.catch(e => e);
     await vi.runAllTimersAsync();
-    let caught;
-    try {
-      await promise;
-    } catch (err) {
-      caught = err;
-    }
+    const caught = await result;
     expect(caught).toBeInstanceOf(AdapterError);
     expect(caught.attempts).toBe(1);
     expect(mockCreate).toHaveBeenCalledTimes(1);
@@ -335,13 +328,10 @@ describe("OpenAIAdapter — US5 regression (T046)", () => {
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
     const promise = adapter.call("system", "user");
+    const result = promise.catch(e => e);
     await vi.runAllTimersAsync();
-    let caught;
-    try {
-      await promise;
-    } catch (err) {
-      caught = err;
-    }
+    const caught = await result;
+    expect(caught).toBeInstanceOf(AdapterError);
     expect(caught.retryable).toBe(true);
   });
 
@@ -357,13 +347,10 @@ describe("OpenAIAdapter — US5 regression (T046)", () => {
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
     const promise = adapter.call("system", "user");
+    const result = promise.catch(e => e);
     await vi.runAllTimersAsync();
-    let caught;
-    try {
-      await promise;
-    } catch (err) {
-      caught = err;
-    }
+    const caught = await result;
+    expect(caught).toBeInstanceOf(AdapterError);
     expect(caught.retryable).toBe(false);
   });
 });
@@ -410,13 +397,9 @@ describe("OpenAIAdapter — FR-020 real SDK error classes", () => {
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
     const promise = adapter.call("system", "user");
+    const result = promise.catch(e => e);
     await vi.runAllTimersAsync();
-    let caught;
-    try {
-      await promise;
-    } catch (err) {
-      caught = err;
-    }
+    const caught = await result;
     expect(caught).toBeInstanceOf(AdapterError);
     expect(caught.retryable).toBe(true);
     expect(caught.attempts).toBe(3);
@@ -431,13 +414,9 @@ describe("OpenAIAdapter — FR-020 real SDK error classes", () => {
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
     const promise = adapter.call("system", "user");
+    const result = promise.catch(e => e);
     await vi.runAllTimersAsync();
-    let caught;
-    try {
-      await promise;
-    } catch (err) {
-      caught = err;
-    }
+    const caught = await result;
     expect(caught).toBeInstanceOf(AdapterError);
     expect(caught.retryable).toBe(true);
     expect(caught.attempts).toBe(3);
@@ -452,13 +431,9 @@ describe("OpenAIAdapter — FR-020 real SDK error classes", () => {
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
     const promise = adapter.call("system", "user");
+    const result = promise.catch(e => e);
     await vi.runAllTimersAsync();
-    let caught;
-    try {
-      await promise;
-    } catch (err) {
-      caught = err;
-    }
+    const caught = await result;
     expect(caught).toBeInstanceOf(AdapterError);
     expect(caught.retryable).toBe(true);
     expect(caught.attempts).toBe(3);
@@ -478,13 +453,9 @@ describe("OpenAIAdapter — FR-020 real SDK error classes", () => {
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
     const promise = adapter.call("system", "user");
+    const result = promise.catch(e => e);
     await vi.runAllTimersAsync();
-    let caught;
-    try {
-      await promise;
-    } catch (err) {
-      caught = err;
-    }
+    const caught = await result;
     expect(caught).toBeInstanceOf(AdapterError);
     expect(caught.retryable).toBe(true);
     expect(caught.attempts).toBe(3);
@@ -504,13 +475,9 @@ describe("OpenAIAdapter — FR-020 real SDK error classes", () => {
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
     const promise = adapter.call("system", "user");
+    const result = promise.catch(e => e);
     await vi.runAllTimersAsync();
-    let caught;
-    try {
-      await promise;
-    } catch (err) {
-      caught = err;
-    }
+    const caught = await result;
     expect(caught).toBeInstanceOf(AdapterError);
     expect(caught.retryable).toBe(true);
     expect(caught.attempts).toBe(3);
@@ -530,13 +497,9 @@ describe("OpenAIAdapter — FR-020 real SDK error classes", () => {
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
     const promise = adapter.call("system", "user");
+    const result = promise.catch(e => e);
     await vi.runAllTimersAsync();
-    let caught;
-    try {
-      await promise;
-    } catch (err) {
-      caught = err;
-    }
+    const caught = await result;
     expect(caught).toBeInstanceOf(AdapterError);
     expect(caught.retryable).toBe(true);
     expect(caught.attempts).toBe(3);
@@ -556,13 +519,9 @@ describe("OpenAIAdapter — FR-020 real SDK error classes", () => {
 
     const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
     const promise = adapter.call("system", "user");
+    const result = promise.catch(e => e);
     await vi.runAllTimersAsync();
-    let caught;
-    try {
-      await promise;
-    } catch (err) {
-      caught = err;
-    }
+    const caught = await result;
     expect(caught).toBeInstanceOf(AdapterError);
     expect(caught.retryable).toBe(false);
     expect(caught.attempts).toBe(1);

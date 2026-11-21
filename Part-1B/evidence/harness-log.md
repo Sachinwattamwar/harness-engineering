@@ -284,6 +284,7 @@ No `src/`, `bin/`, prompts, spec artifacts, or threshold values were changed.
 | 7 | `tests/unit/llm/openai.test.js` — FR-020 real SDK error class tests | Added new `describe("OpenAIAdapter — FR-020 real SDK error classes")` block with 8 tests: `maxRetries: 0` constructor check; `APIConnectionError` (ECONNREFUSED cause) → retryable true; `APIUserAbortError` → retryable true; `APIConnectionTimeoutError` → retryable true; `RateLimitError` (429) → retryable true; `InternalServerError` (500) → retryable true; `NotFoundError` (code `model_not_found`) → retryable true; `BadRequestError` (400) → retryable false, attempts 1. | The old test mocks used raw `Error` objects with hand-set `.code`/`.status`/`.name` that mirrored the implementation's checks. In production the SDK wraps every error in a class hierarchy where `.name === "Error"` on all instances and `.code` on connection errors is on `.cause`, not the wrapper. The new tests instantiate the real SDK classes directly, exercising the `instanceof APIUserAbortError`, `instanceof APIConnectionError`, and `err.cause?.code` branches in `isRetryable()`. | FR-020 |
 | 8 | `tests/unit/llm/openai.test.js` — `vi.mock("openai")` spreads real module | Changed the `vi.mock("openai", () => {...})` factory to `async () => { const actual = await vi.importActual("openai"); return { ...actual, default: vi.fn()... }; }`. The real module's named exports (error classes) are now part of the mock, so `import { APIConnectionError, ... } from "openai"` in the test file resolves to the real classes. The `default` export (OpenAI constructor) is still the `vi.fn()` fake; `_mockCreate` is preserved as the test hook. | Required to allow the top-level static error-class imports to work without importing from the `openai/error.mjs` subpath, and to confirm that error class identity is consistent: `APIConnectionError` from `"openai"` and from `"openai/error.mjs"` are the same reference (`===` verified). | FR-020 |
 | 9 | `tests/unit/llm/openai.test.js` — T044/T046/FR-020 `beforeEach` isolation + real backoff test | In the `beforeEach` of T044, T046, and the FR-020 describe block: replaced `vi.resetAllMocks()` with `vi.clearAllMocks()` + `mockCreate.mockReset()` (on the closure-captured create mock only). Replaced the T046 "backoff delays (placeholder)" test with a real `vi.useFakeTimers()` test: records `Date.now()` at each attempt start, calls `vi.runAllTimersAsync()` to drain all `setTimeout` delays, then asserts `delay1 > 0` and `delay2 > delay1` (FR-020 specifies exponential backoff but not exact values). `vi.useRealTimers()` restores real timers at the end of the test. The adapter is constructed inside the test body after `vi.useFakeTimers()` in all affected tests. | **Root cause (run 6):** `vi.resetAllMocks()` calls `.mockReset()` on **every** mock — including the `default` export (OpenAI constructor). After reset the constructor has no implementation and returns `undefined`. The adapter then sets `this.client = undefined`, and every `this.client.chat.completions.create(...)` call throws `TypeError: Cannot read properties of undefined`. This TypeError is non-retryable, causing `attempts=1` and `retryable=false` for all tests regardless of the error queued. Fix: `vi.clearAllMocks()` resets only call counts, leaving the constructor's `mockImplementation` intact; `mockCreate.mockReset()` clears stale queued rejections from prior tests on the create mock only. | FR-020 |
+| 11 | `tests/unit/llm/openai.test.js` — attach rejection handler before advancing fake timers (14 tests) | For every test where `adapter.call()` produces a rejection: moved the rejection handler registration to **before** `await vi.runAllTimersAsync()`. Two patterns used: (a) `expect(p).rejects` style — `const assertion = expect(p).rejects.toBeInstanceOf(X); await vi.runAllTimersAsync(); await assertion;` (tests (c) p1 and (d)); (b) `p.catch(e => e)` style — `const result = p.catch(e => e); await vi.runAllTimersAsync(); const caught = await result;` followed by the same `expect(caught)...` assertions (all other rejecting tests). No assertion values, expected types, or call-count checks were changed. `src/`, `bin/`, `vitest.config.js`, spec artifacts, and thresholds are untouched. | **Root cause (run 8):** With the pattern `const p = adapter.call(...); await vi.runAllTimersAsync(); try { await p; } catch(e){...}`, the promise is created and timers are advanced (causing the rejection to settle) before any `.catch`/`.then` handler is registered. Node.js briefly marks the rejection as "unhandled" and emits `unhandledRejection`; when the subsequent `await` catches it, Node emits `rejectionHandled`, which Vitest's global hook converts to a `PromiseRejectionHandledWarning`. With 14 such patterns across 4 describe blocks, Vitest counted 14 errors and exited with code 1 even though all 77 assertions passed. Registering the handler before advancing timers ensures the promise never enters the "unhandled" state. | FR-020 |
 
 ---
 
@@ -793,3 +794,83 @@ This is inherent to the test-pattern interaction between fake timers and async r
 | T046 | 1 pass, 2 fail | 3 pass | **+2** |
 | FR-020 | 2 pass, 6 fail | 8 pass | **+6** |
 | **Total** | **69 pass, 8 fail** | **77 pass, 0 fail** | **+8** |
+
+---
+
+## Run 9 — First fully-green harness run (correction #11 applied)
+
+| Field | Value |
+|-------|-------|
+| Timestamp | 2026-11-21T14:37:27.000Z |
+| Branch | `feature/part-1b-reminder-agent` |
+| Phase | B10 — repair cycle 7 (correction #11 applied to `tests/unit/llm/openai.test.js`) |
+
+| Gate | Result | Notes |
+|------|--------|-------|
+| lint | **PASS** | 0 errors; 8 warnings unchanged |
+| security | **PASS** | semgrep 0 findings (0 blocking); `npm audit` 0 vulnerabilities |
+| test | **PASS** | 77/77 tests pass; 0 Vitest Errors; exit code 0 |
+
+**Overall: PASS** — first fully-green run; all gates cleared
+
+**Total suite duration: 4.33 s** (tests 85 %, import 9 %, transform 3 %, worker 3 %)
+
+### Coverage
+
+```
+---------------|---------|----------|---------|---------|-------------------
+File           | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s
+---------------|---------|----------|---------|---------|-------------------
+All files      |   93.42 |       84 |     100 |   94.16 |
+ bin           |   71.42 |    66.66 |     100 |   71.42 |
+  remind.js    |   71.42 |    66.66 |     100 |   71.42 | 24-25,31-32
+ src           |     100 |    92.85 |     100 |     100 |
+  agent.js     |     100 |    92.85 |     100 |     100 | 36
+ src/dates     |   90.47 |    67.85 |     100 |    92.3 |
+  resolver.js  |   90.47 |    67.85 |     100 |    92.3 | 48,51,71
+ src/llm       |   96.77 |       92 |     100 |   98.03 |
+  openai.js    |   95.83 |       90 |     100 |   97.29 | 131
+---------------|---------|----------|---------|---------|-------------------
+
+=============================== Coverage summary ===============================
+Statements   : 93.42% ( 142/152 )
+Branches     : 84.00% ( 84/100 )
+Functions    : 100% ( 17/17 )
+Lines        : 94.16% ( 129/137 )
+================================================================================
+```
+
+**Overall line coverage — 85% threshold:** `Lines : 94.16% ( 129/137 )` — **PASS**
+
+Coverage figures are identical to Run 8; correction #11 changed only the rejection-handler registration pattern, not any code path.
+
+### Test suite — all suites PASS
+
+| Suite | Tests | Result |
+|-------|-------|--------|
+| OpenAIAdapter (base) | 5 | **PASS** |
+| T044 — US5 retry behaviour | 4 | **PASS** |
+| T046 — US5 regression | 3 | **PASS** |
+| FR-020 — real SDK error classes | 8 | **PASS** |
+| Other suites | 57 | **PASS** |
+| **Total** | **77** | **0 failures, 0 Errors** |
+
+### Root cause of Run 8 Vitest Errors — resolved
+
+Correction #11 moved rejection-handler registration to **before** `await vi.runAllTimersAsync()` across all 14 affected tests. The two patterns used:
+
+- `expect(p).rejects` style: `const assertion = expect(p).rejects.toBeInstanceOf(X); await vi.runAllTimersAsync(); await assertion;`
+- `p.catch(e => e)` style: `const result = p.catch(e => e); await vi.runAllTimersAsync(); const caught = await result;`
+
+In both patterns the promise has a registered handler at the point timers fire, so Node.js never enters the "unhandled rejection" state. The 14 `PromiseRejectionHandledWarning` notices (and corresponding `unhandledRejection` events that Vitest counted as Errors) no longer occur.
+
+### Change vs Run 8
+
+| Suite | Run 8 results | Run 9 results | Delta |
+|-------|--------------|--------------|-------|
+| OpenAIAdapter (base) | 5 pass | 5 pass | 0 |
+| T044 | 4 pass | 4 pass | 0 |
+| T046 | 3 pass | 3 pass | 0 |
+| FR-020 | 8 pass | 8 pass | 0 |
+| Vitest Errors | **14** | **0** | **−14** |
+| Harness result | FAIL (test gate) | **PASS (all gates)** | **+1 gate** |
