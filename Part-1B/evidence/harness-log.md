@@ -283,6 +283,7 @@ No `src/`, `bin/`, prompts, spec artifacts, or threshold values were changed.
 | 6 | `tests/unit/llm/openai.test.js` — T044/T046 isolation | Changed T044 `beforeEach` from `vi.clearAllMocks()` → `vi.resetAllMocks()`. Added `let mockCreate` + `beforeEach` with `vi.resetAllMocks()` to T046; fixed T046 tests 1–3 to use the closure-captured `mockCreate` (from the `beforeEach` import) instead of creating a new `vi.fn()` and assigning to `openaiModule._mockCreate`. The `_mockCreate` property mutation was a no-op because the adapter's `OpenAI` constructor receives the original closure reference, not the exported property. | `vi.clearAllMocks()` resets call counts only; stale `mockRejectedValue(ECONNREFUSED)` from a prior test survived into the HTTP 400 test, causing `retryable: true` instead of `false`. `vi.resetAllMocks()` clears queued implementations. | FR-020 |
 | 7 | `tests/unit/llm/openai.test.js` — FR-020 real SDK error class tests | Added new `describe("OpenAIAdapter — FR-020 real SDK error classes")` block with 8 tests: `maxRetries: 0` constructor check; `APIConnectionError` (ECONNREFUSED cause) → retryable true; `APIUserAbortError` → retryable true; `APIConnectionTimeoutError` → retryable true; `RateLimitError` (429) → retryable true; `InternalServerError` (500) → retryable true; `NotFoundError` (code `model_not_found`) → retryable true; `BadRequestError` (400) → retryable false, attempts 1. | The old test mocks used raw `Error` objects with hand-set `.code`/`.status`/`.name` that mirrored the implementation's checks. In production the SDK wraps every error in a class hierarchy where `.name === "Error"` on all instances and `.code` on connection errors is on `.cause`, not the wrapper. The new tests instantiate the real SDK classes directly, exercising the `instanceof APIUserAbortError`, `instanceof APIConnectionError`, and `err.cause?.code` branches in `isRetryable()`. | FR-020 |
 | 8 | `tests/unit/llm/openai.test.js` — `vi.mock("openai")` spreads real module | Changed the `vi.mock("openai", () => {...})` factory to `async () => { const actual = await vi.importActual("openai"); return { ...actual, default: vi.fn()... }; }`. The real module's named exports (error classes) are now part of the mock, so `import { APIConnectionError, ... } from "openai"` in the test file resolves to the real classes. The `default` export (OpenAI constructor) is still the `vi.fn()` fake; `_mockCreate` is preserved as the test hook. | Required to allow the top-level static error-class imports to work without importing from the `openai/error.mjs` subpath, and to confirm that error class identity is consistent: `APIConnectionError` from `"openai"` and from `"openai/error.mjs"` are the same reference (`===` verified). | FR-020 |
+| 9 | `tests/unit/llm/openai.test.js` — T044/T046/FR-020 `beforeEach` isolation + real backoff test | In the `beforeEach` of T044, T046, and the FR-020 describe block: replaced `vi.resetAllMocks()` with `vi.clearAllMocks()` + `mockCreate.mockReset()` (on the closure-captured create mock only). Replaced the T046 "backoff delays (placeholder)" test with a real `vi.useFakeTimers()` test: records `Date.now()` at each attempt start, calls `vi.runAllTimersAsync()` to drain all `setTimeout` delays, then asserts `delay1 > 0` and `delay2 > delay1` (FR-020 specifies exponential backoff but not exact values). `vi.useRealTimers()` restores real timers at the end of the test. The adapter is constructed inside the test body after `vi.useFakeTimers()` in all affected tests. | **Root cause (run 6):** `vi.resetAllMocks()` calls `.mockReset()` on **every** mock — including the `default` export (OpenAI constructor). After reset the constructor has no implementation and returns `undefined`. The adapter then sets `this.client = undefined`, and every `this.client.chat.completions.create(...)` call throws `TypeError: Cannot read properties of undefined`. This TypeError is non-retryable, causing `attempts=1` and `retryable=false` for all tests regardless of the error queued. Fix: `vi.clearAllMocks()` resets only call counts, leaving the constructor's `mockImplementation` intact; `mockCreate.mockReset()` clears stale queued rejections from prior tests on the create mock only. | FR-020 |
 
 ---
 
@@ -528,3 +529,97 @@ This TypeError is non-retryable in `isRetryable`, so:
 **The same `vi.resetAllMocks()` issue affects all three describe blocks.** The inner `OpenAIAdapter` describe (top-level) uses `vi.clearAllMocks()` and those 5 tests continue to pass because `clearAllMocks` only resets call counts, not implementations.
 
 **Fix required:** After `vi.resetAllMocks()`, re-apply the `mockImplementation` on the OpenAI constructor mock before each test, or use `vi.clearAllMocks()` and `mockCreate.mockReset()` only for the create mock, not the constructor mock. This requires editing `tests/unit/llm/openai.test.js`.
+
+---
+
+## Run 7 — Post-correction #9 (T044/T046/FR-020 beforeEach isolation + real backoff test)
+
+| Field | Value |
+|-------|-------|
+| Timestamp | 2026-11-21T09:44:47.300Z |
+| Evidence file | `evidence/harness-results/harness-1795254330536.json` |
+| Branch | `feature/part-1b-reminder-agent` |
+| Phase | B10 — repair cycle 5 (correction #9 applied to `tests/unit/llm/openai.test.js`) |
+
+| Gate | Result | Notes |
+|------|--------|-------|
+| lint | **PASS** | 0 errors; 8 warnings unchanged |
+| security | **PASS** | semgrep 0 findings (0 blocking); `npm audit` 0 vulnerabilities |
+| test | **FAIL** | 8 failed, 69 passed (77 total) — down from 12 in Run 6 |
+
+**Overall: FAIL** — test gate
+
+### Coverage (via `--coverage.reportOnFailure`)
+
+```
+ % Coverage report from v8
+---------------|---------|----------|---------|---------|-------------------
+File           | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s
+---------------|---------|----------|---------|---------|-------------------
+All files      |   93.42 |    83.33 |     100 |   94.16 |
+ bin           |   71.42 |    66.66 |     100 |   71.42 |
+  remind.js    |   71.42 |    66.66 |     100 |   71.42 | 24-25,31-32
+ src           |     100 |    92.85 |     100 |     100 |
+  agent.js     |     100 |    92.85 |     100 |     100 | 36
+ src/dates     |   90.47 |    67.85 |     100 |    92.3 |
+  resolver.js  |   90.47 |    67.85 |     100 |    92.3 | 48,51,71
+ src/llm       |   96.77 |    90.38 |     100 |   98.03 |
+  openai.js    |   95.83 |    88.09 |     100 |   97.29 | 131
+---------------|---------|----------|---------|---------|-------------------
+
+=============================== Coverage summary ===============================
+Statements   : 93.42% ( 142/152 )
+Branches     : 83.33% ( 85/102 )
+Functions    : 100% ( 17/17 )
+Lines        : 94.16% ( 129/137 )
+================================================================================
+```
+
+**Overall line coverage — 85% threshold:** `Lines        : 94.16% ( 129/137 )` — **PASS** (no threshold violation emitted by vitest).
+
+**Branch coverage of `src/llm/openai.js`:** **88.09%** — up from 69.04% in Run 6. The FR-020 real SDK error class tests now exercise the `instanceof APIUserAbortError`, `instanceof APIConnectionError`, and related branches (even the failing tests run long enough to cover code paths before timing out).
+
+### T044 — OpenAIAdapter — US5 retry behaviour (all 4 PASS)
+
+| Test | Result |
+|------|--------|
+| all 3 ECONNREFUSED → AdapterError with attempts=3 | **PASS** |
+| HTTP 400 → AdapterError after 1 attempt, no retry | **PASS** |
+| HTTP 429 → retried | **PASS** |
+| HTTP 500 → retried | **PASS** |
+
+All T044 tests pass for the first time. Correction #9's `vi.clearAllMocks()` + `mockCreate.mockReset()` approach (instead of `vi.resetAllMocks()`) preserves the OpenAI constructor mock implementation while clearing stale queued rejections.
+
+### T046 — OpenAIAdapter — US5 regression (1 PASS, 2 FAIL)
+
+| Test | Result | Failure detail |
+|------|--------|----------------|
+| exponential backoff: each retry waits longer than the previous | **FAIL** | `AssertionError: expected 0 to be greater than 0` — `delay1 = 0` with fake timers |
+| AdapterError.retryable is true for ECONNREFUSED | **FAIL** | `TestTimeoutError` — test timed out at 5000ms |
+| AdapterError.retryable is false for HTTP 400 | **PASS** | — |
+
+The backoff test (new real test replacing the `expect(true).toBe(true)` placeholder from Run 6) fails because `delay1 = Date.now() timestamps[1] - timestamps[0] = 0` — fake timers advance synchronously so `Date.now()` returns the same tick before and after the first retry delay fires. The `ECONNREFUSED retryable` test timeouts suggest the mock is not resolving (the `vi.fn()` warn about non-function/class implementation echoes in stderr for this test).
+
+### FR-020 — real SDK error classes (2 PASS, 6 FAIL)
+
+| Test | Result | Failure detail |
+|------|--------|----------------|
+| client is constructed with maxRetries: 0 | **PASS** | constructor check only |
+| APIConnectionError with ECONNREFUSED cause → retryable: true | **FAIL** | `TestTimeoutError` 5000ms |
+| APIUserAbortError → retryable: true | **FAIL** | `TestTimeoutError` 5000ms |
+| APIConnectionTimeoutError → retryable: true | **FAIL** | `TestTimeoutError` 5000ms |
+| RateLimitError (HTTP 429) → retryable: true | **FAIL** | `TestTimeoutError` 5000ms |
+| InternalServerError (HTTP 500) → retryable: true | **FAIL** | `TestTimeoutError` 5000ms |
+| NotFoundError with code model_not_found → retryable: true | **FAIL** | `TestTimeoutError` 5000ms |
+| BadRequestError (HTTP 400) → retryable: false, attempts: 1 | **PASS** | — |
+
+Six FR-020 tests time out at 5000ms. The pattern is consistent with the `vi.fn()` mock not providing a callable implementation — the OpenAI constructor mock receives `vi.clearAllMocks()` (which preserves the `mockImplementation` set by the `vi.mock()` factory) but the stderr warning `[vitest] The vi.fn() mock did not use 'function' or 'class' in its implementation` appears for each failing test. This suggests the mock implementation is set but not behaving as a constructor, so `this.client.chat.completions.create()` returns a pending promise that never resolves instead of throwing immediately, causing the test to hang until the 5000ms vitest timeout fires.
+
+### Change vs Run 6
+
+| Suite | Run 6 failures | Run 7 failures | Delta |
+|-------|---------------|---------------|-------|
+| T044 | 4 | 0 | **−4** |
+| T046 | 1 | 2 | +1 (backoff placeholder → real failing test) |
+| FR-020 | 7 | 6 | **−1** (BadRequestError now passes) |
+| **Total** | **12** | **8** | **−4** |

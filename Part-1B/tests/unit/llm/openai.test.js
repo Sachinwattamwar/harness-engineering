@@ -171,11 +171,10 @@ describe("OpenAIAdapter — US5 retry behaviour (T044)", () => {
   let mockCreate;
 
   beforeEach(async () => {
-    // resetAllMocks clears both call counts AND queued implementations; clearAllMocks
-    // only resets call counts, leaving stale mockRejectedValue() active across tests.
-    vi.resetAllMocks();
+    vi.clearAllMocks();
     const openaiModule = await import("openai");
     mockCreate = openaiModule._mockCreate;
+    mockCreate.mockReset();
   });
 
   it("all 3 ECONNREFUSED → AdapterError with attempts=3", async () => {
@@ -258,39 +257,44 @@ describe("OpenAIAdapter — US5 regression (T046)", () => {
   let mockCreate;
 
   beforeEach(async () => {
-    // resetAllMocks clears implementations set by prior tests; this is what was
-    // missing before — a stale mockRejectedValue(ECONNREFUSED) survived vi.clearAllMocks()
-    // and caused "retryable is false for HTTP 400" to see ECONNREFUSED instead.
-    vi.resetAllMocks();
+    vi.clearAllMocks();
     const openaiModule = await import("openai");
     mockCreate = openaiModule._mockCreate;
+    mockCreate.mockReset();
   });
 
-  it("backoff delays are 1000ms and 2000ms using fake timers", async () => {
-    if (!OpenAIAdapter || !AdapterError) {
-      expect.fail("OpenAIAdapter/AdapterError not implemented yet");
+  it("exponential backoff: each retry waits longer than the previous", async () => {
+    if (!OpenAIAdapter) {
+      expect.fail("OpenAIAdapter not implemented yet");
     }
-    // Verify via fake timers that exponential backoff is applied correctly.
-    // Uses closure-captured mockCreate (not a reassigned _mockCreate property).
     vi.useFakeTimers();
 
     const connErr = Object.assign(new Error("ECONNREFUSED"), { code: "ECONNREFUSED" });
+    const attemptTimestamps = [];
     let attempt = 0;
     mockCreate.mockImplementation(() => {
+      attemptTimestamps.push(Date.now());
       attempt++;
-      if (attempt < 3) {
-        return Promise.reject(connErr);
-      }
+      if (attempt < 3) return Promise.reject(connErr);
       return Promise.resolve({
         choices: [{ message: { content: JSON.stringify(MOCK_OUTPUT) } }],
         model: "gpt-4o-mini",
       });
     });
 
-    // The adapter should wait 1000ms after attempt 0, 2000ms after attempt 1
-    // With fake timers this is verifiable
+    const adapter = new OpenAIAdapter({ model: "gpt-4o-mini" });
+    const callPromise = adapter.call("system", "user");
+    await vi.runAllTimersAsync();
+    const result = await callPromise;
+
+    expect(result.output).toEqual(MOCK_OUTPUT);
+    expect(attemptTimestamps).toHaveLength(3);
+    const delay1 = attemptTimestamps[1] - attemptTimestamps[0];
+    const delay2 = attemptTimestamps[2] - attemptTimestamps[1];
+    expect(delay1).toBeGreaterThan(0);
+    expect(delay2).toBeGreaterThan(delay1);
+
     vi.useRealTimers();
-    expect(true).toBe(true); // placeholder - actual delay test requires fake timer integration
   });
 
   it("AdapterError.retryable is true for ECONNREFUSED", async () => {
@@ -341,9 +345,10 @@ describe("OpenAIAdapter — FR-020 real SDK error classes", () => {
   let mockCreate;
 
   beforeEach(async () => {
-    vi.resetAllMocks();
+    vi.clearAllMocks();
     const openaiModule = await import("openai");
     mockCreate = openaiModule._mockCreate;
+    mockCreate.mockReset();
   });
 
   it("client is constructed with maxRetries: 0 (FR-020)", async () => {
