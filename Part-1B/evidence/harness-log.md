@@ -353,3 +353,79 @@ _Sachin Wattamwar — to sign below when decision is made_
 **Justification:** _______________________________________________________________
 
 **Date:** _______________
+
+---
+
+## Run 5 — isRetryable production-correctness repair
+
+| Field | Value |
+|-------|-------|
+| Timestamp | 2026-11-21T09:03:16.385Z |
+| Evidence file | `evidence/harness-results/harness-1795251808482.json` |
+| Branch | `feature/part-1b-reminder-agent` |
+| Phase | B10 — repair cycle 3 |
+
+| Gate | Result | Notes |
+|------|--------|-------|
+| lint | **PASS** | 0 errors; 8 warnings unchanged |
+| security | **PASS** | semgrep 0 findings (0 blocking); `npm audit` 0 vulnerabilities |
+| test | **FAIL** | 68/69 pass — same 1 pre-existing T046 test-wiring bug; no regressions |
+
+**Overall: FAIL** — test gate (same failing test as Run 4; no new failures)
+
+### Coverage (via `--coverage.reportOnFailure`)
+
+| File | Stmts | Branches | Funcs | Lines | Uncovered |
+|------|-------|----------|-------|-------|-----------|
+| `bin/remind.js` | 71.42% | 66.66% | 100% | 71.42% | 24–25, 31–32 |
+| `src/agent.js` | 100% | 92.85% | 100% | 100% | branch@36 |
+| `src/dates/resolver.js` | 90.47% | 67.85% | 100% | 92.3% | 48, 51, 71 |
+| `src/llm/adapter.js` | 100% | 100% | 100% | 100% | — |
+| `src/llm/openai.js` | 87.5% | 76.19% | 100% | 97.29% | line 131 |
+| `src/llm/stub.js` | 100% | 100% | 100% | 100% | — |
+| `src/schema/validator.js` | 100% | 100% | 100% | 100% | — |
+| **Overall** | **90.78%** | **78.43%** | **100%** | **94.16%** | — |
+
+`openai.js` branch coverage dropped from Run 4 (88.46% → 76.19%): the new `instanceof APIUserAbortError` and `instanceof APIConnectionError` branches are only reachable with real SDK error objects; test mocks use plain `Error` with `.code`/`.name` properties that are caught by the earlier raw-shape checks. The uncovered branches represent production-only paths (correct — the tests cannot exercise them without real SDK errors). Line 131 (fallthrough `AdapterError` after the retry loop) is unreachable in the current test suite.
+
+---
+
+### Evidence — SDK error shape table (openai 4.104.0)
+
+All SDK error classes extend `OpenAIError extends Error`. **None set `this.name`**, so every instance has `name === "Error"` (inherited from `Error.prototype`). Checks on `.name` or `.code` on the wrapper fail.
+
+| Condition | SDK class thrown | `.name` | `.status` | `.code` | `isRetryable` (old) | `isRetryable` (new) | FR-020 requires |
+|-----------|-----------------|---------|-----------|---------|---------------------|---------------------|-----------------|
+| `AbortSignal.timeout(30000)` fires | `APIUserAbortError` | `"Error"` | `undefined` | `undefined` | **false** ✗ | **true** ✓ | retry |
+| ECONNREFUSED (after `maxRetries:0`) | `APIConnectionError` | `"Error"` | `undefined` | `undefined` (`.cause.code` has it) | **false** ✗ | **true** ✓ | retry |
+| Unknown model (HTTP 404) | `NotFoundError` | `"Error"` | `404` | `"model_not_found"` | **false** ✗ | **true** ✓ | retry |
+| HTTP 429 | `RateLimitError` | `"Error"` | `429` | `null` | true ✓ | true ✓ | retry |
+| HTTP 5xx | `InternalServerError` | `"Error"` | `≥500` | `null` | true ✓ | true ✓ | retry |
+| HTTP 400 | `BadRequestError` | `"Error"` | `400` | `null` | false ✓ | false ✓ | non-retryable |
+
+**Double-retry interaction (old code, maxRetries default 2):** For 429/5xx the SDK's own `shouldRetry` and our loop both fired independently, producing up to 9 total attempts instead of 3. `maxRetries: 0` removes the SDK's retry layer so FR-020's 3-attempt budget is controlled entirely by our loop.
+
+**AbortSignal path detail:** `fetchWithTimeout` wires `signal.addEventListener('abort', () => controller.abort())` and passes only `controller.signal` to fetch. When `AbortSignal.timeout(30000)` fires, the SDK checks `options.signal?.aborted === true` **before** the `retriesRemaining` branch and throws `APIUserAbortError` without retrying — even if `maxRetries > 0`. Setting `maxRetries: 0` is therefore necessary but not sufficient for timeout; the `instanceof APIUserAbortError` check in `isRetryable` is what enables our loop to retry it.
+
+---
+
+### Root cause
+
+The test mocks replaced the entire `"openai"` module with a factory that returns plain `vi.fn()` stubs. The test errors were then constructed as plain `Error` objects with explicit `.code = "ECONNREFUSED"`, `.name = "AbortError"`, `.status = 400` etc. — shapes that matched `isRetryable`'s checks exactly.
+
+The implementation was written to match those shapes. The mocks mirrored the implementation's assumptions instead of the real SDK behaviour. In production, the SDK wraps every error in its own class hierarchy where `.name === "Error"` on all instances and `.code` on connection errors is `undefined` (on the wrapper; real code is on `.cause`). None of the original checks could match.
+
+---
+
+### Change made (`src/llm/openai.js` only)
+
+1. **`maxRetries: 0` in constructor** — disable SDK-level retries; FR-020's 3-attempt budget is now fully controlled by our loop.
+
+2. **Error class imports from `openai/error.mjs` (not `"openai"`)** — `vi.mock("openai")` intercepts only the `"openai"` specifier; subpath imports bypass it and always resolve to real SDK classes. Named imports from the main `"openai"` specifier would throw in tests because Vitest's mock proxy emits an error (not `undefined`) when accessing an export the factory didn't declare.
+
+3. **`isRetryable` extended:**
+   - `err instanceof APIUserAbortError` — catches our 30s `AbortSignal.timeout` (always a timeout in this adapter; we are the only signal source)
+   - `err instanceof APIConnectionError` — catches `APIConnectionError` and its subclass `APIConnectionTimeoutError` via inheritance
+   - `err.cause?.code` check — catches ECONNREFUSED when wrapped in SDK's `APIConnectionError`
+   - `err instanceof NotFoundError && err.code === "model_not_found"` — catches unknown model per FR-020
+   - All existing raw-shape checks (`err.name`, `err.code`, `err.status`) retained for test-mock compatibility
