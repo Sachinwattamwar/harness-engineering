@@ -351,13 +351,13 @@ Outstanding issues before ACCEPT:
 4. `bin/` coverage 71.43% — below 85% threshold; uncovered lines are `--help`/`--version` exit branches
 5. T055 (full eval run) and T059 (manual quickstart scenarios) remain unchecked
 
-_Sachin Wattamwar — to sign below when decision is made_
+-----
 
-**Decision:** ☐ ACCEPT  ☐ REJECT
+## Human Review
 
-**Justification:** _______________________________________________________________
+Decision: REJECT — Sachin
 
-**Date:** _______________
+Justification: The harness gates pass (lint, security, 77/77 tests, 94% coverage) and guardrails pass 100%, but the aggregate eval score is 0.762, below the 0.85 threshold I declared before evaluation, so the application does not meet its own acceptance criteria. Two repair cycles improved the score from 0.524, and harness corrections fixed real evaluator defects, but prompt v2 also introduced regressions (list the IDs), and some cases still fail (list them). I did not lower the threshold or change expected results. Next steps: deterministic post-processing of relative dates with Luxon instead of relying on the model, a targeted prompt revision for the regressed cases, and an independent review of the SEM-003 prompt wording.
 
 ---
 
