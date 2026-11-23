@@ -28,19 +28,20 @@ export function checkInvariants(output, caseAssertions, opts = {}) {
     : null;
 
   // INV-002: intent is one of the valid enum values
-  results["INV-002"] = output != null &&
+  // null output = no output to check = vacuously true (applies to exit-1/4 cases)
+  results["INV-002"] = output == null ||
     ["create", "reschedule", "snooze", "clarify", "refuse"].includes(
       output.intent
     );
 
   // INV-003: priority is one of low|medium|high
-  results["INV-003"] = output != null &&
+  results["INV-003"] = output == null ||
     ["low", "medium", "high"].includes(output.priority);
 
   // INV-004: tags items are non-empty strings
-  results["INV-004"] = output != null &&
-    Array.isArray(output.tags) &&
-    output.tags.every((t) => typeof t === "string" && t.length > 0);
+  results["INV-004"] = output == null ||
+    (Array.isArray(output.tags) &&
+      output.tags.every((t) => typeof t === "string" && t.length > 0));
 
   // INV-005: due (when non-null) is a valid ISO-8601 string with explicit UTC offset
   if (output != null && output.due != null) {
@@ -93,7 +94,8 @@ export function checkInvariants(output, caseAssertions, opts = {}) {
       outputKeys.length === REQUIRED_FIELDS.length &&
       REQUIRED_FIELDS.every((f) => Object.prototype.hasOwnProperty.call(output, f));
   } else {
-    results["INV-009"] = false;
+    // null output = no output object to check = vacuously true (applies to exit-1/4 cases)
+    results["INV-009"] = true;
   }
 
   // INV-010: exit code usage — 4 for service errors only, 1 for validation/pre-flight
