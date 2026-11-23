@@ -1584,19 +1584,177 @@ Prompt change (v1 → v2) fixed 9 cases; introduced 3 regressions; 4 cases persi
 
 ---
 
+## Eval Run 3 — 2026-11-23T11:21:18.122Z
+
+### Metadata
+
+| Field | Value |
+|-------|-------|
+| Run ID | 3 |
+| Timestamp | 2026-11-23T11:21:18.122Z |
+| Evidence file | `evidence/eval-runs/run-3-2026-11-23T11-21-18-122Z.json` |
+| Provider | openai |
+| Model | gpt-4o-mini |
+| Temperature | 0 |
+| Prompt version | v3 (`prompts/v3.txt`) — harness field shows `"v1"` (hardcoded in protected `.harness/run-eval.js`) |
+| Branch | feature/part-1b-reminder-agent |
+
+---
+
+### Failing case analysis from run 2 (inputs to this repair)
+
+| Case | Input | Actual (run 2) | Failed rule | Root cause |
+|------|-------|---------------|-------------|------------|
+| AC-006 | "Snooze for 30 minutes" | intent=clarify | intent assertion | v2 snooze rule required "EXISTING, referenced reminder"; bare snooze with duration had no explicit reference → clarify |
+| AC-018 | "Buy groceries for the dinner party next Friday" | SEM-004 fail | L3 semantic | Tags didn't match request words verbatim; session non-determinism |
+| AC-022 | "🎉🎊🎈" | intent=refuse or create (2/3 runs) | intent assertion | Model classified emoji as adversarial (refuse) or invented task (create) |
+| AC-003 | "Buy milk" | intent=create, guessed time | intent assertion | Model filled in missing time pragmatically; FR-007 prohibition lacked concrete examples |
+| AC-004 | "at 3pm tomorrow" | intent=create, title="Reminder" | intent assertion | Model invented generic title for time-only request |
+| AC-008 | "Move my dentist reminder to next Monday at 10am" (Sunday ref) | due=Nov 23 | dueExact assertion | PROP-010 worked example only showed Wed→Mon (5 days); Sun→Mon (1 day) case not covered |
+| AC-028 | "Remind me in 2 days" (Feb 27 2028 ref) | intent or due wrong | intent or dueExact | Either snooze intent persisted for distant date or leap-day due computation wrong |
+
+---
+
+### Prompt changes — v2 → v3
+
+| # | Location | Change | Addresses |
+|---|---------|--------|-----------|
+| 1 | Date rules — PROP-010 | Added second worked example: "referenceNow is Sunday 2026-10-04 → 'next Monday' = 2026-10-05 (1 day ahead)" | AC-008 |
+| 2 | intent = create (opening) | Added "BOTH a task AND a future due time" (emphasis on both required) | AC-003, AC-004 |
+| 3 | intent = clarify | Added concrete examples: "at 3pm tomorrow" → no task → clarify; "Buy milk" → no time → clarify; "Never infer a default time or default title" | AC-003, AC-004 |
+| 4 | intent = clarify | Changed "emoji, symbols" bullet to explicitly state "Emoji-only or symbol-only input is NOT adversarial — use clarify, not refuse" | AC-022 |
+| 5 | intent = snooze | Added form 2: "Bare snooze command with a stated duration ('Snooze for N minutes', 'Snooze for 2 hours') — even when no specific reminder is named" | AC-006 |
+
+---
+
+### Eval Run 3 results
+
+#### Layer 1 — Schema validation
+All 26 cases: L1 pass rate **100%** (3/3 runs each). `layer1AllPass=true`.
+
+#### Layer 2 — Invariants (INV/PROP/GR)
+All 26 cases: all checks pass on all runs. No L2 failures.
+
+#### Layer 3 — Semantic (SEM-001–004)
+All cases pass L3. No SEM failures.
+
+#### Assertions (checkAssertions) — failures
+
+| Case | Failing assertion | Detail |
+|------|-----------------|--------|
+| AC-007 | `intent` | Expected `intent=clarify` (snooze missing duration); model returns `intent=snooze` — regression from v3 snooze rule (see §Regressions) |
+| AC-008 | `dueExact` | "next Monday" from Sunday Nov 15 → model returns Nov 23 not Nov 16; second PROP-010 example not effective |
+| AC-027 | `dueExact` (1/3 runs) | "Remind me in 2 days" from Nov 29 → flaky; runs 1–2 pass, run 3 fails |
+| AC-028 | `intent` or `dueExact` | Still fails; same input as AC-027 but Feb 27 2028 reference |
+
+---
+
+### Per-case Run 2 → Run 3 comparison
+
+| Case | Run 2 mean | Run 3 mean | Δ | Status |
+|------|-----------|-----------|---|--------|
+| AC-001 | 1.000 | 1.000 | 0 | ✅ Stable |
+| AC-002 | 1.000 | 1.000 | 0 | ✅ Stable |
+| AC-003 | 0.000 | 1.000 | +1.000 | ✅ Fixed |
+| AC-004 | 0.000 | 1.000 | +1.000 | ✅ Fixed |
+| AC-005 | 1.000 | 1.000 | 0 | ✅ Stable |
+| AC-006 | 0.000 | 1.000 | +1.000 | ✅ Fixed |
+| AC-007 | 1.000 | 0.000 | -1.000 | ❌ Regression |
+| AC-008 | 0.000 | 0.000 | 0 | ❌ Persistent |
+| AC-009 | 1.000 | 1.000 | 0 | ✅ Stable |
+| AC-010 | 1.000 | 1.000 | 0 | ✅ Stable |
+| AC-011 | 1.000 | 1.000 | 0 | ✅ Stable |
+| AC-012 | 1.000 | 1.000 | 0 | ✅ Stable |
+| AC-013 | 1.000 | 1.000 | 0 | ✅ Stable |
+| AC-014 | 1.000 | 1.000 | 0 | ✅ Stable |
+| AC-015 | 1.000 | 1.000 | 0 | ✅ Stable |
+| AC-017 | 1.000 | 1.000 | 0 | ✅ Stable |
+| AC-018 | 0.000 | 1.000 | +1.000 | ✅ Fixed |
+| AC-019 | 1.000 | 1.000 | 0 | ✅ Stable |
+| AC-020 | 1.000 | 1.000 | 0 | ✅ Stable |
+| AC-021 | 1.000 | 1.000 | 0 | ✅ Stable |
+| AC-022 | 0.333 | 1.000 | +0.667 | ✅ Fixed |
+| AC-023 | 1.000 | 1.000 | 0 | ✅ Stable |
+| AC-026 | 1.000 | 1.000 | 0 | ✅ Stable |
+| AC-027 | 1.000 | 0.667 | -0.333 | ❌ Regression (flaky) |
+| AC-028 | 0.000 | 0.000 | 0 | ❌ Persistent |
+| AC-029 | 1.000 | 1.000 | 0 | ✅ Stable |
+
+Fixed: 5 cases. Regressions: 2 (AC-007 full, AC-027 partial). Persistent: 2 (AC-008, AC-028).
+
+---
+
+### Guardrail pass rate (SC-002)
+
+All 4 guardrail cases (AC-009–012) score 1.0 on all 3 runs. `guardrailPass=true`. **SC-002 PASS.**
+
+---
+
+### Aggregate weighted score
+
+```
+Numerator = Σ(weight × mean):
+  Guardrail (weight=3, mean=1.0):  AC-009, AC-010, AC-011, AC-012  →  4×3×1.0 = 12.000
+  Non-guardrail at mean=1.0 (w=2): 18 cases                        → 18×2×1.0 = 36.000
+  AC-027 at mean=0.667 (w=2):                                       →  1×2×0.667 =  1.333
+  3 cases at mean=0.0 (w=2):       AC-007, AC-008, AC-028           →  0
+  Numerator = 49.333
+
+Denominator = 56
+
+aggregate_score = 49.333 / 56 = 0.881
+```
+
+**0.881 ≥ 0.85 — SC-003 PASS.** (Run 1: 0.524 → Run 2: 0.762 → Run 3: 0.881)
+
+---
+
+### Regression introduced by prompt v3
+
+#### AC-007 — [ambiguous] "Snooze my alarm" (1.000 → 0.000)
+
+| Field | Value |
+|-------|-------|
+| Input | `"Snooze my alarm"` — no duration stated |
+| Expected | `intent=clarify` (ask for snooze duration) |
+| Actual (run 3) | `intent=snooze` (all 3 runs) |
+| Root cause | v3 snooze rule form 1 listed "snooze my alarm" as a valid snooze example. The input text exactly matches this example, so the model classifies it as intent=snooze. The clarify rule correctly requires a duration, but the prompt example in the snooze section overrides it. The fix would be to remove "snooze my alarm" (no duration) from snooze examples and restrict form 1 examples to cases that include a duration. |
+
+#### AC-027 — [boundary] "Remind me in 2 days" from Nov 29 (1.000 → 0.667 flaky)
+
+| Field | Value |
+|-------|-------|
+| Run 3 scores | [1, 1, 0] |
+| Root cause | Non-determinism. The same input passed in all 3 runs of run 2. Run 3 third invocation fails — probably returns snooze. No prompt change targeted this case; the drift is session-level variation with temperature=0. |
+
+---
+
+### Remaining failures at eval run 3
+
+| Case | Category | Root cause | Addressable in next cycle? |
+|------|----------|------------|---------------------------|
+| AC-007 | ambiguous | v3 prompt example "snooze my alarm" contradicts clarify-without-duration rule | Yes — remove no-duration example from snooze rule |
+| AC-008 | normal | "next Monday" from Sunday → model returns Nov 23 not Nov 16; second PROP-010 example not effective | Possibly — different framing; model may need explicit "if current day is Sunday, next Monday is tomorrow" |
+| AC-027 | boundary | Flaky (1,1,0) non-determinism | Unlikely via prompt alone |
+| AC-028 | boundary | Leap-year boundary or persistent snooze intent for distant-future date | Possibly |
+
+---
+
 ## Known Limitations / Residual Risks
+
+*(Updated after eval run 3 — SC-003 now PASS at 0.881)*
 
 | # | Limitation | Severity | Notes |
 |---|-----------|----------|-------|
-| 1 | **Aggregate 0.762 < 0.85 (SC-003 FAIL)** — 7 cases still fail or are flaky at eval run 2 | High | Threshold declared in spec before eval; application does not meet SC-003 |
-| 2 | **Regressed cases from prompt v2:** AC-006 (snooze rule too strict — standalone "Snooze for N minutes" now returns `clarify`), AC-018 (SEM-004 non-determinism — tags differ across sessions), AC-022 (flaky emoji input) | Medium | v2 snooze rule requires explicit reference to existing reminder; AC-006 dataset expects bare snooze to return `intent=snooze`; revert or soften rule would fix AC-006 |
-| 3 | **Persistent failures:** AC-003 and AC-004 (model invents info instead of clarifying); AC-008 ("next Monday" arithmetic wrong despite PROP-010 prompt rule); AC-028 (leap-year / snooze boundary) | Medium | Diminishing prompt returns for gpt-4o-mini on these edge cases; would require model upgrade or few-shot examples |
-| 4 | **Flaky cases at temperature=0:** AC-022 (emoji) scores [0,1,0] in run 2; temperature=0 does not eliminate cross-session non-determinism in gpt-4o-mini | Low | 3 runs per case partially mitigates but does not eliminate |
-| 5 | **CLI exit-4 path end-to-end only via stub** — eval harness sets `OPENAI_BASE_URL=http://localhost:9999` for expected-exit-4 cases; this exercises the connection-error path but not real OpenAI rate-limit or timeout handling in production | Low | Unit tests cover `AdapterError` classification; full timeout path (30 s `AbortSignal`) requires a real or proxy endpoint |
-| 6 | **`security/detect-unsafe-regex` warning in `src/dates/resolver.js:42`** — regex `/(\d{1,2})(?::(\d{2}))?\s*(am\|pm)?/`; flagged statically by ESLint security plugin | Low | Bounded, non-nested quantifiers; no realistic ReDoS risk on short user time strings; accepted as warning (not error) |
-| 7 | **`eval-results.jsonl` written to `specs/001-nl-reminder-agent/`** — the eval harness writes a secondary JSONL log to `specs/` rather than `evidence/`; this is a harness output-path mismatch | Low | Does not affect scoring; `evidence/eval-results.json` and `evidence/eval-runs/` contain the canonical results |
-| 8 | **OpenAI API dependency and cost** — `npm run eval` makes 26 × 3 = 78 real API calls to `gpt-4o-mini`; eval cannot run without a funded `OPENAI_API_KEY` | Medium | No offline eval mode; eval run 2 cost is small but non-zero; stub mode blocked by design (FR-022) |
-| 9 | **`bin/` line coverage 71.42%** — subprocess tests do not instrument the child process; `remind.js` lines 24–25 and 31–32 are uncovered | Low | Overall 94.16 % lines meets threshold in aggregate; `bin/` alone is below 85 %; correct fix requires in-process Commander test |
+| 1 | **AC-007 regression from prompt v3** — "snooze my alarm" example in snooze rule caused model to return `intent=snooze` instead of `intent=clarify` for a no-duration snooze request | Medium | Addressable: remove no-duration example from snooze form 1; dataset expects `intent=clarify` for "Snooze my alarm" |
+| 2 | **Persistent failure AC-008** — "next Monday" from Sunday: model returns Nov 23 (7 days) instead of Nov 16 (1 day) despite two PROP-010 worked examples | Medium | Diminishing prompt returns for gpt-4o-mini; would require a Sunday-specific example or model upgrade |
+| 3 | **Persistent failure AC-028** — "Remind me in 2 days" from Feb 27 2028: assertion failure (intent or leap-day due) despite FR-010 fix working for the November analogue (AC-027) | Low | Edge case; leap-day boundary or distant-date non-determinism |
+| 4 | **Flaky AC-027** — "Remind me in 2 days" from Nov 29 scores [1,1,0] in run 3; was [1,1,1] in run 2 | Low | temperature=0 does not eliminate cross-session variation; 3 runs per case partially mitigates |
+| 5 | **CLI exit-4 path end-to-end only via stub** — eval harness sets `OPENAI_BASE_URL=http://localhost:9999` for expected-exit-4 cases; real production timeout (30 s `AbortSignal`) untested | Low | Unit tests cover `AdapterError` classification; full path requires real or proxy endpoint |
+| 6 | **`security/detect-unsafe-regex` warning in `src/dates/resolver.js:42`** — ESLint security plugin flags the time-parsing regex statically | Low | Bounded quantifiers; no realistic ReDoS risk; accepted as warning |
+| 7 | **`eval-results.jsonl` written to `specs/001-nl-reminder-agent/`** — harness output-path mismatch; canonical results are in `evidence/` | Low | Does not affect scoring |
+| 8 | **OpenAI API dependency and cost** — `npm run eval` makes ~78 real API calls; requires funded key; stub mode blocked by design (FR-022) | Medium | No offline eval mode |
+| 9 | **`bin/` line coverage 71.42%** — subprocess tests do not instrument the child process; overall 94.16 % meets threshold | Low | Correct fix requires in-process Commander test |
 
 ---
 

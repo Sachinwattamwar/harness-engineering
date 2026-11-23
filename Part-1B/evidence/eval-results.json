@@ -1,6 +1,6 @@
 {
-  "runId": 2,
-  "timestamp": "2026-11-23T10:18:14.818Z",
+  "runId": 3,
+  "timestamp": "2026-11-23T11:21:18.122Z",
   "provider": "openai",
   "model": "gpt-4o-mini",
   "temperature": 0,
@@ -249,11 +249,11 @@
     {
       "caseId": "AC-018",
       "runScores": [
-        0,
-        0,
-        0
+        1,
+        1,
+        1
       ],
-      "meanScore": 0,
+      "meanScore": 1,
       "weight": 2,
       "layer1Results": [
         true,
@@ -348,16 +348,16 @@
       ],
       "layer3Results": [
         {
-          "SEM-004": 0,
-          "semanticScore": 0
+          "SEM-004": 1,
+          "semanticScore": 1
         },
         {
-          "SEM-004": 0,
-          "semanticScore": 0
+          "SEM-004": 1,
+          "semanticScore": 1
         },
         {
-          "SEM-004": 0,
-          "semanticScore": 0
+          "SEM-004": 1,
+          "semanticScore": 1
         }
       ],
       "flaky": false,
@@ -484,9 +484,9 @@
       "runScores": [
         1,
         1,
-        1
+        0
       ],
-      "meanScore": 1,
+      "meanScore": 0.6666666666666666,
       "weight": 2,
       "layer1Results": [
         true,
@@ -590,8 +590,10 @@
           "semanticScore": 1
         }
       ],
-      "flaky": false,
-      "flakyFields": [],
+      "flaky": true,
+      "flakyFields": [
+        "intent"
+      ],
       "errorRuns": 0
     },
     {
@@ -827,11 +829,11 @@
     {
       "caseId": "AC-003",
       "runScores": [
-        0,
-        0,
-        0
+        1,
+        1,
+        1
       ],
-      "meanScore": 0,
+      "meanScore": 1,
       "weight": 2,
       "layer1Results": [
         true,
@@ -945,11 +947,11 @@
     {
       "caseId": "AC-004",
       "runScores": [
-        0,
-        0,
-        0
+        1,
+        1,
+        1
       ],
-      "meanScore": 0,
+      "meanScore": 1,
       "weight": 2,
       "layer1Results": [
         true,
@@ -1178,11 +1180,11 @@
     {
       "caseId": "AC-007",
       "runScores": [
-        1,
-        1,
-        1
+        0,
+        0,
+        0
       ],
-      "meanScore": 1,
+      "meanScore": 0,
       "weight": 2,
       "layer1Results": [
         true,
@@ -1411,11 +1413,11 @@
     {
       "caseId": "AC-022",
       "runScores": [
-        0,
         1,
-        0
+        1,
+        1
       ],
-      "meanScore": 0.3333333333333333,
+      "meanScore": 1,
       "weight": 2,
       "layer1Results": [
         true,
@@ -1519,20 +1521,18 @@
           "semanticScore": 1
         }
       ],
-      "flaky": true,
-      "flakyFields": [
-        "intent"
-      ],
+      "flaky": false,
+      "flakyFields": [],
       "errorRuns": 0
     },
     {
       "caseId": "AC-006",
       "runScores": [
-        0,
-        0,
-        0
+        1,
+        1,
+        1
       ],
-      "meanScore": 0,
+      "meanScore": 1,
       "weight": 2,
       "layer1Results": [
         true,
@@ -3039,7 +3039,7 @@
       "errorRuns": 0
     }
   ],
-  "aggregateScore": 0.761904761904762,
-  "result": "FAIL",
+  "aggregateScore": 0.880952380952381,
+  "result": "PASS",
   "errorCount": 0
 }

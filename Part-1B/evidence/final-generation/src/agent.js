@@ -6,8 +6,8 @@ import { validate } from "./schema/validator.js";
 import { validateTimezone } from "./dates/resolver.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PROMPT_PATH = join(__dirname, "../prompts/v2.txt");
-const PROMPT_VERSION = "v2";
+const PROMPT_PATH = join(__dirname, "../prompts/v3.txt");
+const PROMPT_VERSION = "v3";
 
 const WEEKDAY_NAMES = ["", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
