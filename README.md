@@ -8,7 +8,7 @@
 
 ## Overview
 
-This repository contains two applications built end-to-end via the GitHub **Spec Kit** Spec-Driven Development (SDD) workflow, each validated by an independent harness before human acceptance.
+This repository contains two applications built end-to-end via the GitHub **Spec Kit** Spec-Driven Development(SDD) workflow, each validated by an independent harness before human acceptance.
 
 | Part | Application | Behaviour |
 |------|-------------|-----------|
