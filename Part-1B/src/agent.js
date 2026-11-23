@@ -6,8 +6,10 @@ import { validate } from "./schema/validator.js";
 import { validateTimezone } from "./dates/resolver.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PROMPT_PATH = join(__dirname, "../prompts/v1.txt");
-const PROMPT_VERSION = "v1";
+const PROMPT_PATH = join(__dirname, "../prompts/v2.txt");
+const PROMPT_VERSION = "v2";
+
+const WEEKDAY_NAMES = ["", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 const ISO_WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}([+-]\d{2}:\d{2}|Z)$/;
 
@@ -57,8 +59,10 @@ export async function run({ text, referenceNow, timezone = "Asia/Kolkata" }) {
 
   const systemPrompt = readFileSync(PROMPT_PATH, "utf8");
 
+  const ref = DateTime.fromISO(referenceNow, { setZone: true });
+  const weekdayName = WEEKDAY_NAMES[ref.weekday] ?? "";
   const userMessage = [
-    `referenceNow: ${referenceNow}`,
+    `referenceNow: ${referenceNow} (${weekdayName})`,
     `timezone: ${timezone}`,
     `request: ${text}`,
   ].join("\n");

@@ -1,6 +1,6 @@
 {
-  "runId": 1,
-  "timestamp": "2026-11-23T03:53:22.667Z",
+  "runId": 2,
+  "timestamp": "2026-11-23T10:18:14.818Z",
   "provider": "openai",
   "model": "gpt-4o-mini",
   "temperature": 0,
@@ -131,11 +131,11 @@
     {
       "caseId": "AC-002",
       "runScores": [
-        0,
-        0,
+        1,
+        1,
         1
       ],
-      "meanScore": 0.3333333333333333,
+      "meanScore": 1,
       "weight": 2,
       "layer1Results": [
         true,
@@ -242,14 +242,130 @@
           "semanticScore": 1
         }
       ],
-      "flaky": true,
-      "flakyFields": [
-        "intent"
-      ],
+      "flaky": false,
+      "flakyFields": [],
       "errorRuns": 0
     },
     {
       "caseId": "AC-018",
+      "runScores": [
+        0,
+        0,
+        0
+      ],
+      "meanScore": 0,
+      "weight": 2,
+      "layer1Results": [
+        true,
+        true,
+        true
+      ],
+      "layer2Results": [
+        {
+          "INV-002": true,
+          "INV-003": true,
+          "INV-004": true,
+          "INV-005": true,
+          "INV-006": true,
+          "INV-007": true,
+          "INV-008": true,
+          "INV-009": true,
+          "INV-010": true,
+          "INV-011": true,
+          "PROP-001": true,
+          "PROP-002": true,
+          "PROP-003": true,
+          "PROP-004": true,
+          "PROP-005": true,
+          "PROP-006": true,
+          "PROP-007": true,
+          "PROP-008": true,
+          "PROP-009": true,
+          "PROP-010": true,
+          "GR-001": true,
+          "GR-002": true,
+          "GR-003": true,
+          "GR-004": true,
+          "GR-005": true,
+          "GR-006": true
+        },
+        {
+          "INV-002": true,
+          "INV-003": true,
+          "INV-004": true,
+          "INV-005": true,
+          "INV-006": true,
+          "INV-007": true,
+          "INV-008": true,
+          "INV-009": true,
+          "INV-010": true,
+          "INV-011": true,
+          "PROP-001": true,
+          "PROP-002": true,
+          "PROP-003": true,
+          "PROP-004": true,
+          "PROP-005": true,
+          "PROP-006": true,
+          "PROP-007": true,
+          "PROP-008": true,
+          "PROP-009": true,
+          "PROP-010": true,
+          "GR-001": true,
+          "GR-002": true,
+          "GR-003": true,
+          "GR-004": true,
+          "GR-005": true,
+          "GR-006": true
+        },
+        {
+          "INV-002": true,
+          "INV-003": true,
+          "INV-004": true,
+          "INV-005": true,
+          "INV-006": true,
+          "INV-007": true,
+          "INV-008": true,
+          "INV-009": true,
+          "INV-010": true,
+          "INV-011": true,
+          "PROP-001": true,
+          "PROP-002": true,
+          "PROP-003": true,
+          "PROP-004": true,
+          "PROP-005": true,
+          "PROP-006": true,
+          "PROP-007": true,
+          "PROP-008": true,
+          "PROP-009": true,
+          "PROP-010": true,
+          "GR-001": true,
+          "GR-002": true,
+          "GR-003": true,
+          "GR-004": true,
+          "GR-005": true,
+          "GR-006": true
+        }
+      ],
+      "layer3Results": [
+        {
+          "SEM-004": 0,
+          "semanticScore": 0
+        },
+        {
+          "SEM-004": 0,
+          "semanticScore": 0
+        },
+        {
+          "SEM-004": 0,
+          "semanticScore": 0
+        }
+      ],
+      "flaky": false,
+      "flakyFields": [],
+      "errorRuns": 0
+    },
+    {
+      "caseId": "AC-026",
       "runScores": [
         1,
         1,
@@ -350,15 +466,12 @@
       ],
       "layer3Results": [
         {
-          "SEM-004": 1,
           "semanticScore": 1
         },
         {
-          "SEM-004": 1,
           "semanticScore": 1
         },
         {
-          "SEM-004": 1,
           "semanticScore": 1
         }
       ],
@@ -367,130 +480,13 @@
       "errorRuns": 0
     },
     {
-      "caseId": "AC-026",
-      "runScores": [
-        1,
-        0,
-        0
-      ],
-      "meanScore": 0.3333333333333333,
-      "weight": 2,
-      "layer1Results": [
-        true,
-        true,
-        true
-      ],
-      "layer2Results": [
-        {
-          "INV-002": true,
-          "INV-003": true,
-          "INV-004": true,
-          "INV-005": true,
-          "INV-006": true,
-          "INV-007": true,
-          "INV-008": true,
-          "INV-009": true,
-          "INV-010": true,
-          "INV-011": true,
-          "PROP-001": true,
-          "PROP-002": true,
-          "PROP-003": true,
-          "PROP-004": true,
-          "PROP-005": true,
-          "PROP-006": true,
-          "PROP-007": true,
-          "PROP-008": true,
-          "PROP-009": true,
-          "PROP-010": true,
-          "GR-001": true,
-          "GR-002": true,
-          "GR-003": true,
-          "GR-004": true,
-          "GR-005": true,
-          "GR-006": true
-        },
-        {
-          "INV-002": true,
-          "INV-003": true,
-          "INV-004": true,
-          "INV-005": true,
-          "INV-006": true,
-          "INV-007": true,
-          "INV-008": true,
-          "INV-009": true,
-          "INV-010": true,
-          "INV-011": true,
-          "PROP-001": true,
-          "PROP-002": false,
-          "PROP-003": true,
-          "PROP-004": true,
-          "PROP-005": true,
-          "PROP-006": true,
-          "PROP-007": true,
-          "PROP-008": true,
-          "PROP-009": true,
-          "PROP-010": true,
-          "GR-001": true,
-          "GR-002": true,
-          "GR-003": true,
-          "GR-004": true,
-          "GR-005": true,
-          "GR-006": true
-        },
-        {
-          "INV-002": true,
-          "INV-003": true,
-          "INV-004": true,
-          "INV-005": true,
-          "INV-006": true,
-          "INV-007": true,
-          "INV-008": true,
-          "INV-009": true,
-          "INV-010": true,
-          "INV-011": true,
-          "PROP-001": true,
-          "PROP-002": false,
-          "PROP-003": true,
-          "PROP-004": true,
-          "PROP-005": true,
-          "PROP-006": true,
-          "PROP-007": true,
-          "PROP-008": true,
-          "PROP-009": true,
-          "PROP-010": true,
-          "GR-001": true,
-          "GR-002": true,
-          "GR-003": true,
-          "GR-004": true,
-          "GR-005": true,
-          "GR-006": true
-        }
-      ],
-      "layer3Results": [
-        {
-          "semanticScore": 1
-        },
-        {
-          "semanticScore": 1
-        },
-        {
-          "semanticScore": 1
-        }
-      ],
-      "flaky": true,
-      "flakyFields": [
-        "due"
-      ],
-      "errorRuns": 0
-    },
-    {
       "caseId": "AC-027",
       "runScores": [
-        0,
-        0,
-        0
+        1,
+        1,
+        1
       ],
-      "meanScore": 0,
+      "meanScore": 1,
       "weight": 2,
       "layer1Results": [
         true,
@@ -1415,11 +1411,11 @@
     {
       "caseId": "AC-022",
       "runScores": [
+        0,
         1,
-        1,
-        1
+        0
       ],
-      "meanScore": 1,
+      "meanScore": 0.3333333333333333,
       "weight": 2,
       "layer1Results": [
         true,
@@ -1523,18 +1519,20 @@
           "semanticScore": 1
         }
       ],
-      "flaky": false,
-      "flakyFields": [],
+      "flaky": true,
+      "flakyFields": [
+        "intent"
+      ],
       "errorRuns": 0
     },
     {
       "caseId": "AC-006",
       "runScores": [
-        1,
-        1,
-        1
+        0,
+        0,
+        0
       ],
-      "meanScore": 1,
+      "meanScore": 0,
       "weight": 2,
       "layer1Results": [
         true,
@@ -1766,11 +1764,11 @@
     {
       "caseId": "AC-009",
       "runScores": [
-        0,
-        0,
-        0
+        1,
+        1,
+        1
       ],
-      "meanScore": 0,
+      "meanScore": 1,
       "weight": 3,
       "layer1Results": [
         true,
@@ -1865,16 +1863,16 @@
       ],
       "layer3Results": [
         {
-          "SEM-003": 0,
-          "semanticScore": 0
+          "SEM-003": 1,
+          "semanticScore": 1
         },
         {
-          "SEM-003": 0,
-          "semanticScore": 0
+          "SEM-003": 1,
+          "semanticScore": 1
         },
         {
-          "SEM-003": 0,
-          "semanticScore": 0
+          "SEM-003": 1,
+          "semanticScore": 1
         }
       ],
       "flaky": false,
@@ -2002,11 +2000,11 @@
     {
       "caseId": "AC-011",
       "runScores": [
-        0,
-        0,
-        0
+        1,
+        1,
+        1
       ],
-      "meanScore": 0,
+      "meanScore": 1,
       "weight": 3,
       "layer1Results": [
         true,
@@ -2101,16 +2099,16 @@
       ],
       "layer3Results": [
         {
-          "SEM-003": 0,
-          "semanticScore": 0
+          "SEM-003": 1,
+          "semanticScore": 1
         },
         {
-          "SEM-003": 0,
-          "semanticScore": 0
+          "SEM-003": 1,
+          "semanticScore": 1
         },
         {
-          "SEM-003": 0,
-          "semanticScore": 0
+          "SEM-003": 1,
+          "semanticScore": 1
         }
       ],
       "flaky": false,
@@ -2238,11 +2236,11 @@
     {
       "caseId": "AC-015",
       "runScores": [
-        0,
-        0,
-        0
+        1,
+        1,
+        1
       ],
-      "meanScore": 0,
+      "meanScore": 1,
       "weight": 2,
       "layer1Results": [
         true,
@@ -2251,14 +2249,14 @@
       ],
       "layer2Results": [
         {
-          "INV-002": false,
-          "INV-003": false,
-          "INV-004": false,
+          "INV-002": true,
+          "INV-003": true,
+          "INV-004": true,
           "INV-005": true,
           "INV-006": true,
           "INV-007": true,
           "INV-008": true,
-          "INV-009": false,
+          "INV-009": true,
           "INV-010": true,
           "INV-011": true,
           "PROP-001": true,
@@ -2279,14 +2277,14 @@
           "GR-006": true
         },
         {
-          "INV-002": false,
-          "INV-003": false,
-          "INV-004": false,
+          "INV-002": true,
+          "INV-003": true,
+          "INV-004": true,
           "INV-005": true,
           "INV-006": true,
           "INV-007": true,
           "INV-008": true,
-          "INV-009": false,
+          "INV-009": true,
           "INV-010": true,
           "INV-011": true,
           "PROP-001": true,
@@ -2307,14 +2305,14 @@
           "GR-006": true
         },
         {
-          "INV-002": false,
-          "INV-003": false,
-          "INV-004": false,
+          "INV-002": true,
+          "INV-003": true,
+          "INV-004": true,
           "INV-005": true,
           "INV-006": true,
           "INV-007": true,
           "INV-008": true,
-          "INV-009": false,
+          "INV-009": true,
           "INV-010": true,
           "INV-011": true,
           "PROP-001": true,
@@ -2353,11 +2351,11 @@
     {
       "caseId": "AC-019",
       "runScores": [
-        0,
-        0,
-        0
+        1,
+        1,
+        1
       ],
-      "meanScore": 0,
+      "meanScore": 1,
       "weight": 2,
       "layer1Results": [
         true,
@@ -2366,14 +2364,14 @@
       ],
       "layer2Results": [
         {
-          "INV-002": false,
-          "INV-003": false,
-          "INV-004": false,
+          "INV-002": true,
+          "INV-003": true,
+          "INV-004": true,
           "INV-005": true,
           "INV-006": true,
           "INV-007": true,
           "INV-008": true,
-          "INV-009": false,
+          "INV-009": true,
           "INV-010": true,
           "INV-011": true,
           "PROP-001": true,
@@ -2394,14 +2392,14 @@
           "GR-006": true
         },
         {
-          "INV-002": false,
-          "INV-003": false,
-          "INV-004": false,
+          "INV-002": true,
+          "INV-003": true,
+          "INV-004": true,
           "INV-005": true,
           "INV-006": true,
           "INV-007": true,
           "INV-008": true,
-          "INV-009": false,
+          "INV-009": true,
           "INV-010": true,
           "INV-011": true,
           "PROP-001": true,
@@ -2422,14 +2420,14 @@
           "GR-006": true
         },
         {
-          "INV-002": false,
-          "INV-003": false,
-          "INV-004": false,
+          "INV-002": true,
+          "INV-003": true,
+          "INV-004": true,
           "INV-005": true,
           "INV-006": true,
           "INV-007": true,
           "INV-008": true,
-          "INV-009": false,
+          "INV-009": true,
           "INV-010": true,
           "INV-011": true,
           "PROP-001": true,
@@ -2468,11 +2466,11 @@
     {
       "caseId": "AC-020",
       "runScores": [
-        0,
-        0,
-        0
+        1,
+        1,
+        1
       ],
-      "meanScore": 0,
+      "meanScore": 1,
       "weight": 2,
       "layer1Results": [
         true,
@@ -2481,14 +2479,14 @@
       ],
       "layer2Results": [
         {
-          "INV-002": false,
-          "INV-003": false,
-          "INV-004": false,
+          "INV-002": true,
+          "INV-003": true,
+          "INV-004": true,
           "INV-005": true,
           "INV-006": true,
           "INV-007": true,
           "INV-008": true,
-          "INV-009": false,
+          "INV-009": true,
           "INV-010": true,
           "INV-011": true,
           "PROP-001": true,
@@ -2509,14 +2507,14 @@
           "GR-006": true
         },
         {
-          "INV-002": false,
-          "INV-003": false,
-          "INV-004": false,
+          "INV-002": true,
+          "INV-003": true,
+          "INV-004": true,
           "INV-005": true,
           "INV-006": true,
           "INV-007": true,
           "INV-008": true,
-          "INV-009": false,
+          "INV-009": true,
           "INV-010": true,
           "INV-011": true,
           "PROP-001": true,
@@ -2537,14 +2535,14 @@
           "GR-006": true
         },
         {
-          "INV-002": false,
-          "INV-003": false,
-          "INV-004": false,
+          "INV-002": true,
+          "INV-003": true,
+          "INV-004": true,
           "INV-005": true,
           "INV-006": true,
           "INV-007": true,
           "INV-008": true,
-          "INV-009": false,
+          "INV-009": true,
           "INV-010": true,
           "INV-011": true,
           "PROP-001": true,
@@ -2583,11 +2581,11 @@
     {
       "caseId": "AC-023",
       "runScores": [
-        0,
-        0,
-        0
+        1,
+        1,
+        1
       ],
-      "meanScore": 0,
+      "meanScore": 1,
       "weight": 2,
       "layer1Results": [
         true,
@@ -2596,14 +2594,14 @@
       ],
       "layer2Results": [
         {
-          "INV-002": false,
-          "INV-003": false,
-          "INV-004": false,
+          "INV-002": true,
+          "INV-003": true,
+          "INV-004": true,
           "INV-005": true,
           "INV-006": true,
           "INV-007": true,
           "INV-008": true,
-          "INV-009": false,
+          "INV-009": true,
           "INV-010": true,
           "INV-011": true,
           "PROP-001": true,
@@ -2624,14 +2622,14 @@
           "GR-006": true
         },
         {
-          "INV-002": false,
-          "INV-003": false,
-          "INV-004": false,
+          "INV-002": true,
+          "INV-003": true,
+          "INV-004": true,
           "INV-005": true,
           "INV-006": true,
           "INV-007": true,
           "INV-008": true,
-          "INV-009": false,
+          "INV-009": true,
           "INV-010": true,
           "INV-011": true,
           "PROP-001": true,
@@ -2652,14 +2650,14 @@
           "GR-006": true
         },
         {
-          "INV-002": false,
-          "INV-003": false,
-          "INV-004": false,
+          "INV-002": true,
+          "INV-003": true,
+          "INV-004": true,
           "INV-005": true,
           "INV-006": true,
           "INV-007": true,
           "INV-008": true,
-          "INV-009": false,
+          "INV-009": true,
           "INV-010": true,
           "INV-011": true,
           "PROP-001": true,
@@ -3041,7 +3039,7 @@
       "errorRuns": 0
     }
   ],
-  "aggregateScore": 0.5238095238095238,
+  "aggregateScore": 0.761904761904762,
   "result": "FAIL",
   "errorCount": 0
 }
