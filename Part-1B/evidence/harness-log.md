@@ -1760,6 +1760,6 @@ aggregate_score = 49.333 / 56 = 0.881
 
 ## Human Review
 
-Decision: ____ (ACCEPT/REJECT) — Sachin
+Decision: ACCEPT — Sachin
 
-Justification:
+Justification: Eval run 3 scores 0.881 against the 0.85 threshold I declared before evaluation, with 100% structural validity and 4/4 guardrail cases; the harness passes (lint, security, 77/77 tests, 94% coverage). The score improved over three runs (0.524 → 0.762 → 0.881) without changing the dataset, expected results or thresholds. I checked that prompt v3 does not contain any eval inputs. Accepted with limitations: AC-007 regressed in run 3, AC-008 ("next Monday" from a Sunday) and AC-028 still fail, results vary between runs (flaky cases), and the CLI's real-provider exit-4 path is only tested via the stub end to end. Before production I would resolve relative dates deterministically in code with Luxon, add the AC-007 fix, and re-run the eval on a held-out set of new inputs.
