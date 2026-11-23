@@ -1,0 +1,153 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "eval-result/v1",
+  "title": "EvalRunRecord",
+  "description": "Schema for one complete eval run record. Required output locations: evidence/eval-results.json (full summary + per-case results of latest run; overwritten each run) and evidence/eval-runs/run-<n>-<timestamp>.json (identical per-run copy; never deleted). An additional eval-results.jsonl log may use this same schema but is not a substitute for the two required JSON files.",
+  "type": "object",
+  "required": [
+    "runId",
+    "timestamp",
+    "provider",
+    "model",
+    "temperature",
+    "promptVersion",
+    "harnessVersion",
+    "cases",
+    "aggregateScore",
+    "result",
+    "errorCount"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "runId": {
+      "type": ["string", "integer"],
+      "description": "Monotonically increasing run identifier (integer) or UUID string."
+    },
+    "timestamp": {
+      "type": "string",
+      "description": "ISO-8601 datetime of run start."
+    },
+    "provider": {
+      "type": "string",
+      "description": "Active LLM provider name (e.g. 'openai')."
+    },
+    "model": {
+      "type": "string",
+      "description": "Active model name (e.g. 'gpt-4o-mini')."
+    },
+    "temperature": {
+      "type": "number",
+      "const": 0,
+      "description": "LLM temperature. Always 0."
+    },
+    "promptVersion": {
+      "type": "string",
+      "description": "Version identifier of the active prompt file (e.g. 'v1')."
+    },
+    "harnessVersion": {
+      "type": "string",
+      "description": "Version of the eval harness (from package.json or manual tag)."
+    },
+    "cases": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/EvalCaseResult" },
+      "description": "Per-case results for this run."
+    },
+    "aggregateScore": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Weighted aggregate score across all non-ERROR cases (0–1)."
+    },
+    "result": {
+      "type": "string",
+      "enum": ["PASS", "FAIL"],
+      "description": "Overall eval result against all declared thresholds."
+    },
+    "errorCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total number of ERROR-classified case runs (exit code 4). These are excluded from aggregateScore."
+    }
+  },
+  "definitions": {
+    "EvalCaseResult": {
+      "type": "object",
+      "required": [
+        "caseId", "runScores", "meanScore", "weight",
+        "layer1Results", "layer2Results", "layer3Results",
+        "flaky", "flakyFields", "errorRuns"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "caseId": {
+          "type": "string",
+          "description": "References EvalCase.id (e.g. 'AC-001')."
+        },
+        "runScores": {
+          "type": "array",
+          "items": { "type": "number", "enum": [0, 1] },
+          "minItems": 3,
+          "maxItems": 3,
+          "description": "Binary pass/fail (1/0) for each of the 3 runs."
+        },
+        "meanScore": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Arithmetic mean of runScores (0, 0.333, 0.667, or 1.0)."
+        },
+        "weight": {
+          "type": "integer",
+          "enum": [1, 2, 3],
+          "description": "Case weight: 3=GR, 2=INV/PROP, 1=FR/AC/SEM."
+        },
+        "layer1Results": {
+          "type": "array",
+          "items": { "type": "boolean" },
+          "minItems": 3,
+          "maxItems": 3,
+          "description": "Schema validation pass/fail per run."
+        },
+        "layer2Results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": { "type": "boolean" }
+          },
+          "minItems": 3,
+          "maxItems": 3,
+          "description": "Per-run map of INV/PROP/GR identifier → boolean."
+        },
+        "layer3Results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "semanticScore": { "type": "number", "minimum": 0, "maximum": 1 }
+            },
+            "additionalProperties": { "type": "boolean" }
+          },
+          "minItems": 3,
+          "maxItems": 3,
+          "description": "Per-run map of SEM identifier → boolean, plus semanticScore fraction."
+        },
+        "flaky": {
+          "type": "boolean",
+          "description": "True if the 3 runs produced inconsistent results on intent, priority, due (±1 min), or title meaning."
+        },
+        "flakyFields": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Names of fields that disagreed across runs (e.g. ['intent', 'due'])."
+        },
+        "errorRuns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3,
+          "description": "Number of runs for this case classified as ERROR (exit code 4)."
+        }
+      }
+    }
+  }
+}

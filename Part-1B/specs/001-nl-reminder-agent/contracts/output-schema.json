@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "reminder-output/v1",
+  "title": "ReminderOutput",
+  "description": "Schema-validated output of the NL Reminder Agent CLI. Version v1. Any change to field names, types, or enum values requires a schema version bump and a new $id.",
+  "type": "object",
+  "required": [
+    "intent",
+    "title",
+    "due",
+    "priority",
+    "tags",
+    "clarification_question",
+    "refusal_reason"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "intent": {
+      "type": "string",
+      "enum": ["create", "reschedule", "snooze", "clarify", "refuse"],
+      "description": "The agent's interpretation of the user's request."
+    },
+    "title": {
+      "type": ["string", "null"],
+      "description": "The task title extracted or inferred from the request. Non-null and non-empty for intent=create. Best-effort for reschedule/snooze. Null for clarify and refuse."
+    },
+    "due": {
+      "type": ["string", "null"],
+      "description": "ISO-8601 datetime string with explicit UTC offset (e.g. 2026-11-16T15:00:00+05:30). Non-null for create/reschedule/snooze when time is determinable. Null for clarify and refuse."
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["low", "medium", "high"],
+      "description": "Task priority inferred from the request. Defaults to medium when no signal is present."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Array of topically relevant short strings. May be empty."
+    },
+    "clarification_question": {
+      "type": ["string", "null"],
+      "description": "A focused question asking for the specifically-missing information. Non-null and non-empty when intent=clarify. Null otherwise."
+    },
+    "refusal_reason": {
+      "type": ["string", "null"],
+      "description": "An explanation of why the request was refused. Non-null and non-empty when intent=refuse. Null otherwise."
+    }
+  }
+}

@@ -1,0 +1,120 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "eval-dataset/v1",
+  "title": "EvalDataset",
+  "description": "Schema for evals/dataset.json — the array of eval cases used by the eval harness.",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "$ref": "#/definitions/EvalCase"
+  },
+  "definitions": {
+    "EvalCase": {
+      "type": "object",
+      "required": ["id", "description", "input", "assertions", "mappedIds"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^AC-[0-9]{3}$",
+          "description": "Unique case identifier matching an AC-xxx entry from the spec."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable scenario name."
+        },
+        "input": {
+          "$ref": "#/definitions/EvalInput"
+        },
+        "assertions": {
+          "$ref": "#/definitions/EvalAssertions"
+        },
+        "mappedIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^(FR|AC|INV|PROP|GR|SEM)-[0-9]{3}$"
+          },
+          "description": "One or more INV/PROP/GR/FR/AC/SEM identifiers from the spec that this case validates."
+        },
+        "expected_exit_code": {
+          "type": "integer",
+          "enum": [0, 1, 4],
+          "default": 0,
+          "description": "Expected CLI exit code. Defaults to 0. run-eval.js: if actual exit matches → evaluate layers normally; if actual exit 4 and expected_exit_code ≠ 4 → classify as ERROR (excluded from scoring)."
+        }
+      }
+    },
+    "EvalInput": {
+      "type": "object",
+      "required": ["text", "referenceNow"],
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "description": "The natural-language reminder request text."
+        },
+        "referenceNow": {
+          "type": "string",
+          "description": "ISO-8601 datetime with explicit UTC offset used as the reference datetime.",
+          "examples": ["2026-11-15T09:00:00+05:30", "2026-11-15T03:30:00Z"]
+        },
+        "timezone": {
+          "type": "string",
+          "default": "Asia/Kolkata",
+          "description": "IANA timezone string. Defaults to Asia/Kolkata if omitted."
+        }
+      }
+    },
+    "EvalAssertions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Declarative assertions checked by the harness. All fields are optional; harness checks only the ones present.",
+      "properties": {
+        "intent": {
+          "type": "string",
+          "enum": ["create", "reschedule", "snooze", "clarify", "refuse"],
+          "description": "Expected intent value."
+        },
+        "dueExact": {
+          "type": "string",
+          "description": "Expected exact ISO-8601 due value."
+        },
+        "dueTolerance": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Tolerance in seconds for due comparison (default 60 for ±1 min; 300 for ±5 min)."
+        },
+        "dueIsNull": {
+          "type": "boolean",
+          "description": "If true, asserts that due === null."
+        },
+        "titleNonNull": {
+          "type": "boolean",
+          "description": "If true, asserts that title is a non-empty string."
+        },
+        "priorityDefault": {
+          "type": "boolean",
+          "description": "If true, asserts that priority === 'medium'."
+        },
+        "expected_exit_code": {
+          "type": "integer",
+          "enum": [0, 1, 4],
+          "description": "Expected CLI exit code (legacy assertions field — prefer top-level EvalCase.expected_exit_code; both accepted by harness)."
+        },
+        "semChecks": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^SEM-[0-9]{3}$"
+          },
+          "description": "SEM-xxx identifiers to evaluate for this case."
+        }
+      }
+    }
+  }
+}
